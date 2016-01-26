@@ -478,6 +478,125 @@ float get_standard_error(vector<float>& y_data, float standard_deviation)
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// This function gets the difference between neighbouring elements in a vector
+// Same as np.diff in Python
+// Output vector will be one element shorter than the input vector
+// FJC 10/11/15
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+vector<float> difference(vector<float>& y_data)
+{
+  vector<float> diff;
+  for (int i = 0; i < int(y_data.size())-1; i++)
+  {    
+    float difference = y_data[i+1] - y_data[i];
+    diff.push_back(difference);
+  }
+  
+  return diff;  
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// This function gets the main peaks from a vector of y data.  User must set a y-threshold 
+// which the amplitude of the peak must be above, and a distance between peaks (smaller
+// peaks very close to a large one will be removed).
+// It returns the indices of the input vector which represent the peaks.
+// Ported from the Python package PeakUtils https://pypi.python.org/pypi/PeakUtils
+// The MIT License (MIT)
+// Copyright (c) 2014 Lucas Hermann Negri
+
+// FJC 10/11/15
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void get_peak_indices(vector<float>& y_data, float threshold, int distance, vector<int>& peak_indices)
+{
+  vector<int> peak_indices_temp;
+  vector<float> peak_values_temp;
+  // get the vector with nearest neighbour differences
+  vector<float> diff = difference(y_data);
+
+  // append 0 to start of vector - use this to identify rising limbs
+  vector<float> diff_rising(diff);
+  vector<float>::iterator it; 
+  it = diff_rising.begin();
+  diff_rising.insert(it, 0.0);
+  
+  // append 0 to end of vector - use this to identify falling limbs
+  vector<float> diff_falling(diff);
+  diff_falling.push_back(0.0);
+  
+  for (int i = 0; i < int(diff_rising.size()); i++)
+  {
+    if(diff_falling[i] < 0 && diff_rising[i] > 0 && y_data[i] > threshold)    //identifies peaks using neighbour differences
+    {
+      peak_indices_temp.push_back(i);
+      peak_values_temp.push_back(y_data[i]);
+      //cout << "Potential peak value: " << y_data[i] << " Peak index: " << i << endl;
+    }  
+  }
+  
+  if (int(peak_indices_temp.size()) > 1)
+  {
+    //initialise vectors for sorting
+    vector<float> peak_values_sorted;
+    vector<int> peak_indices_sorted;
+    vector<size_t> index_map;
+    
+    //sort peak indices by maximum value
+    matlab_float_sort(peak_values_temp,  peak_values_sorted, index_map);
+    matlab_int_reorder(peak_indices_temp, index_map, peak_indices_sorted);
+    reverse(peak_indices_sorted.begin(), peak_indices_sorted.end());
+    
+    //get binary vector of peak locations
+    vector<int> check_peaks;
+    check_peaks.resize(int(y_data.size()), 0);
+    vector<int>:: iterator find_it;
+    for (int i = 0; i < int(check_peaks.size()); i++)
+    {
+      // set binary to 1 if we are at a peak
+      find_it = find(peak_indices_temp.begin(), peak_indices_temp.end(), i);
+      if (find_it != peak_indices_temp.end()) 
+      {
+        check_peaks[i] = 1;
+      }
+    }
+    
+    // loop through peaks from highest - lowest removing peaks within min distance
+    for (int i = 0; i < int(peak_indices_sorted.size()); i++)
+    {
+      if (check_peaks[peak_indices_sorted[i]] == 1)
+      {
+        //get the indices of the min and max distances
+        int min_dist = peak_indices_sorted[i] - distance;
+        int max_dist = peak_indices_sorted[i] + distance;
+        if (min_dist < 0) min_dist = 0;
+        if (max_dist >= int(check_peaks.size())) max_dist = int(check_peaks.size()) - 1;  
+        for (int j = min_dist; j <= max_dist; j++)
+        {
+          //remove peaks within the specified distance from the highest peak
+          check_peaks[j] = 0;
+          check_peaks[peak_indices_sorted[i]] = 1;
+        }
+      }      
+    }
+    for (int i = 0; i < int(check_peaks.size()); i++)
+    {
+      if (check_peaks[i] == 1)
+      {
+        //copy to final vector
+        peak_indices.push_back(i); 
+        //cout << "Removed small peaks, Peak value: " << y_data[i] << " Peak index: " << i << endl;
+      }
+    }
+  }
+  else 
+  {
+    peak_indices = peak_indices_temp;
+  }
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // this function returns a vector with several common statistics
 // the vector has the following elements
 // 0 mean
@@ -4385,6 +4504,42 @@ double deg(double radians)
   return (radians/M_PI)*deg;
 }
 
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Get the data for a boxplot from an unsorted vector of floats, which does not
+// contain any NDV values.
+//
+// Returns a vector, which contains (in this order):
+//
+// 2Percentile 25Percentile median mean 75Percentile 98Percentile minimum maximum
+//
+// SWDG 12/11/15
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+vector<float> BoxPlot(vector<float> data){
+
+  vector<float> Boxplot;
+  vector<size_t> index_map;
+  vector<float> SortedData;
+  matlab_float_sort(data, SortedData, index_map);
+  float pc2 = get_percentile(SortedData, 2);
+  float pc25 = get_percentile(SortedData, 25);
+  float pc50 = get_percentile(SortedData, 50);
+  float pc75 = get_percentile(SortedData, 75);
+  float pc98 = get_percentile(SortedData, 98);
+  float mean = get_mean(SortedData);
+
+  Boxplot.push_back(pc2);
+  Boxplot.push_back(pc25);
+  Boxplot.push_back(pc50);
+  Boxplot.push_back(mean);
+  Boxplot.push_back(pc75);
+  Boxplot.push_back(pc98);
+
+  //get the max and min values from the sorted vector
+  Boxplot.push_back(SortedData.front());
+  Boxplot.push_back(SortedData.back());
+
+  return Boxplot;
+}
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Method to generate Statistical distribution. - DTM
@@ -4628,83 +4783,122 @@ float Get_Maximum(Array2D<int> Input, float NDV){
 }
 
 // Method to get the index of the maximum value in a 2D array of floats - MDH 28/8/14
-int Get_Maximum_Index(Array2D<float> Input, int NDV) {
-	float max = 0;
-	int maxi, maxj;
-	for (int i = 0; i < Input.dim1(); ++i) {
-   	for(int j = 0; j < Input.dim2(); ++j) {
-   	   if (Input[i][j] > max && Input[i][j] != NDV) {
-        		max = Input[i][j];
-        		maxi = i;
-        		maxj = j;
-   } 	} 	}
-  	return maxi*Input.dim2() + maxj;
+int Get_Maximum_Index(Array2D<float> Input, int NDV)
+{
+  float max = 0;
+  int maxi = 0; 
+  int maxj = 0;
+  for (int i = 0; i < Input.dim1(); ++i) 
+  {
+    for(int j = 0; j < Input.dim2(); ++j) 
+    {
+      if (Input[i][j] > max && Input[i][j] != NDV) 
+      {
+        max = Input[i][j];
+        maxi = i;
+        maxj = j;
+      }
+    }
+  }
+  return maxi*Input.dim2() + maxj;
 }
 
 // Method to get the index of the maximum value in a 2D array of ints - MDH 28/8/14
 int Get_Maximum_Index(Array2D<int> Input, int NDV) {
-	float max = 0;
-	int maxi, maxj;
-	for (int i = 0; i < Input.dim1(); ++i) {
-   	for(int j = 0; j < Input.dim2(); ++j) {
-   	   if (Input[i][j] > max && Input[i][j] != NDV) {
-        		max = Input[i][j];
-        		maxi = i;
-        		maxj = j;
-   } 	} 	}
-  	return maxi*Input.dim2() + maxj;
+  float max = 0;
+  int maxi = 0; 
+  int maxj = 0;
+  for (int i = 0; i < Input.dim1(); ++i) 
+  {
+     for(int j = 0; j < Input.dim2(); ++j) 
+     {
+       if (Input[i][j] > max && Input[i][j] != NDV) 
+       {
+         max = Input[i][j];
+         maxi = i;
+         maxj = j;
+       }
+    }
+  }
+  return maxi*Input.dim2() + maxj;
 }
 
 //Routine to return minimum value from a 2D Array
-float Get_Minimum(Array2D<float> Input, int NDV){
-  	float min = 10000;
+float Get_Minimum(Array2D<float> Input, int NDV)
+{
+  float min = 10000;
 
-	for (int i = 0; i < Input.dim1(); ++i){
-   	for(int j = 0; j < Input.dim2(); ++j){
-   	   if (Input[i][j] < min && Input[i][j] != NDV){
-   			min = Input[i][j];
-   } 	} 	}
+  for (int i = 0; i < Input.dim1(); ++i)
+  {
+    for(int j = 0; j < Input.dim2(); ++j)
+    {
+      if (Input[i][j] < min && Input[i][j] != NDV)
+      {
+        min = Input[i][j];
+      }
+    }
+  }
    
-	return min;
+  return min;
 }
 
 //Routine to return minimum value from a 2D Array
-float Get_Minimum(Array2D<int> Input, int NDV){
-  	int min = 10000;
-	for (int i = 0; i < Input.dim1(); ++i){
-   	for(int j = 0; j < Input.dim2(); ++j){
-   	   if (Input[i][j] < min && Input[i][j] != NDV){
-   			min = Input[i][j];
-   } 	} 	}
+float Get_Minimum(Array2D<int> Input, int NDV)
+{
+  int min = 10000;
+  for (int i = 0; i < Input.dim1(); ++i)
+  {
+    for(int j = 0; j < Input.dim2(); ++j)
+    {
+      if (Input[i][j] < min && Input[i][j] != NDV)
+      {
+        min = Input[i][j];
+      }
+    }
+  }
    
-	return min;
+  return min;
 }
 
 //Routine to return index for minimum value from a 2D Array of floats
-int Get_Minimum_Index(Array2D<float> Input, int NDV){
-	float min = 10000;
-	int mini, minj;
-	for (int i = 0; i < Input.dim1(); ++i) {
-   	for(int j = 0; j < Input.dim2(); ++j) {
-   	   if (Input[i][j] < min && Input[i][j] != NDV) {
-        		min = Input[i][j];
-        		mini = i;
-        		minj = j;
-   }	} 	}
-  	return mini*Input.dim2() + minj;
+int Get_Minimum_Index(Array2D<float> Input, int NDV)
+{
+  float min = 10000;
+  int mini = 0;
+  int minj = 0;
+  for (int i = 0; i < Input.dim1(); ++i)
+  {
+    for(int j = 0; j < Input.dim2(); ++j)
+    {
+      if (Input[i][j] < min && Input[i][j] != NDV)
+      {
+        min = Input[i][j];
+        mini = i;
+        minj = j;
+      }
+    } 
+  }
+  return mini*Input.dim2() + minj;
 }
 //Routine to return index for minimum value from a 2D Array of ints
-int Get_Minimum_Index(Array2D<int> Input, int NDV){
-	int min = 10000;
-	int mini, minj;
-	for (int i = 0; i < Input.dim1(); ++i) {
-   	for(int j = 0; j < Input.dim2(); ++j) {
-   	   if (Input[i][j] < min && Input[i][j] != NDV) {
-        		min = Input[i][j];
-        		mini = i;
-        		minj = j;
-   } 	} 	}
-  	return mini*Input.dim2() + minj;
+int Get_Minimum_Index(Array2D<int> Input, int NDV)
+{
+  float min = 10000;
+  int mini = 0;
+  int minj = 0;
+  for (int i = 0; i < Input.dim1(); ++i)
+  {
+    for(int j = 0; j < Input.dim2(); ++j)
+    {
+      if (Input[i][j] < min && Input[i][j] != NDV)
+      {
+        min = Input[i][j];
+        mini = i;
+        minj = j;
+      }
+    } 
+  }
+  return mini*Input.dim2() + minj;
 }
 
 //Routine to count the number of values in an array - MDH 27/8/14
@@ -5205,6 +5399,23 @@ void Count_Instances(vector<int> Data, vector<int> Key_Values, map<int,int>& Dat
 
 }
 
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=--==
+// This gets the size of a file. 
+// From http://stackoverflow.com/questions/5840148/how-can-i-get-a-files-size-in-c
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=--==
+int get_file_size(string filename) // path to file
+{
+    //cout << "Opening file: " << filename << endl;
+    FILE *p_file = NULL;
+    p_file = fopen(filename.c_str(),"rb");
+    fseek(p_file,0,SEEK_END);
+    //cout << "Getting the end" << endl;
+    int size = ftell(p_file);
+    fclose(p_file);
+    return size;
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=--==
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=--==
 // Given a filestream object, read the file into memory and return

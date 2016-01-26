@@ -996,6 +996,14 @@ vector<int> GetChannelHeadsChiMethodFromValleys(vector<int> ValleyNodes,
   /// @param junction integer reciever index.
   /// @return Integer reciever of junction.
   int get_Receiver_of_Junction(int junction) const;
+  
+  /// @details Get downstream junction
+  /// @param starting_junction starting junction
+  /// @param FlowInfo LSDFlowInfo object
+  /// @return integer with downstream junction number
+  /// @author FJC
+  /// @date 08/10/15
+  int get_downstream_junction(int starting_junction, LSDFlowInfo& FlowInfo);
 	
   /// @details Gets the stream order of a junction
   /// @param FlowInfo LSDFlowInfo object
@@ -1042,6 +1050,24 @@ vector<int> GetChannelHeadsChiMethodFromValleys(vector<int> ValleyNodes,
   
   void couple_hillslope_nodes_to_channel_nodes(LSDRaster& Elevation, LSDFlowInfo& FlowInfo, LSDRaster& D_inf_Flowdir, LSDIndexRaster& ChannelNodeNetwork, int OutletJunction, vector<int>& hillslope_nodes, vector<int>& baselevel_channel_nodes);
   
+  /// @details This function removes patches of floodplain that are not connected to the channel network.
+  /// It must be passed an LSDIndexRaster with the floodplain patches labelled with a specific ID
+  /// number (done using Dave's connected components algorithm)
+  /// @param FloodplainPatches LSDIndexRaster with patches labelled with ID number
+  /// @return LSDIndexRaster with binary mask of floodplain patches
+  /// @author FJC
+  /// @date 22/10/15
+  LSDIndexRaster remove_hillslope_patches_from_floodplain_mask(LSDIndexRaster& FloodplainPatches);
+  
+  /// @details This function calculates the relief of each pixel compared to the nearest downstream
+  /// channel pixel equal or greater to the threshold stream order
+  /// @param ElevationRaster LSDRaster with elevations
+  /// @param FlowInfo LSDFlowInfo object
+  /// @param threshold_SO threshold stream order to calculate relief from
+  /// @return LSDRaster with channel relief
+  /// @author FJC
+  /// @date 17/11/15
+  LSDRaster calculate_relief_from_channel(LSDRaster& ElevationRaster, LSDFlowInfo& FlowInfo, int threshold_SO);
   
   protected:
 
