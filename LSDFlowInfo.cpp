@@ -739,6 +739,65 @@ void LSDFlowInfo::print_vector_of_nodeindices_to_csv_file(vector<int>& nodeindex
 
   csv_out.close();
 }
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Write nodeindex vector to csv file, and give each row a unique ID
+//
+// SWDG after SMM 2/2/2016
+//
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDFlowInfo::print_vector_of_nodeindices_to_csv_file_Unique(vector<int>& nodeindex_vec, string outfilename)
+{
+
+  // fid the last '.' in the filename to use in the scv filename
+  unsigned dot = outfilename.find_last_of(".");
+
+  string prefix = outfilename.substr(0,dot);
+  //string suffix = str.substr(dot);
+  string insert = "_nodeindices_for_Arc.csv";
+  string outfname = prefix+insert;
+
+  cout << "the Arc filename is: " << outfname << endl;
+
+  int n_nodes = nodeindex_vec.size();
+  int n_nodeindeces = RowIndex.size();
+
+  // open the outfile
+  ofstream csv_out;
+  csv_out.open(outfname.c_str());
+  csv_out.precision(8);
+
+  csv_out << "x,y,node,row,col,unique_ID" << endl;
+
+  int current_row, current_col;
+  float x,y;
+
+  // loop through node indices in vector
+  for (int i = 0; i<n_nodes; i++)
+    {
+      int current_node = nodeindex_vec[i];
+
+      // make sure the nodeindex isn't out of bounds
+      if (current_node < n_nodeindeces)
+	{
+	  // get the row and column
+	  retrieve_current_row_and_col(current_node,current_row,
+				       current_col);
+
+	  // get the x and y location of the node
+	  // the last 0.0001*DataResolution is to make sure there are no integer data points
+	  x = XMinimum + float(current_col)*DataResolution + 0.5*DataResolution + 0.0001*DataResolution;
+
+	  // the last 0.0001*DataResolution is to make sure there are no integer data points
+	  // y coord a bit different since the DEM starts from the top corner
+	  y = YMinimum + float(NRows-current_row)*DataResolution - 0.5*DataResolution + 0.0001*DataResolution;;
+	  csv_out << x << "," << y << "," << current_node << "," << current_row << "," << current_col << "," << i << endl;
+	}
+    }
+
+  csv_out.close();
+}
+
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -1465,7 +1524,46 @@ LSDIndexRaster LSDFlowInfo::write_NodeIndexVector_to_LSDIndexRaster(vector<int>&
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//
+// This function writes an LSDIndesxRaster given a list of node indices, and give every
+// pixel its nodeindex value, which is unique.
+//
+// SWDG after SMM 2/2/16
+//
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+LSDIndexRaster LSDFlowInfo::write_NodeIndexVector_to_LSDIndexRaster_Unique(vector<int>& nodeindexvec)
+{
+  int n_node_indices = nodeindexvec.size();
+  Array2D<int> chan(NRows,NCols,NoDataValue);
 
+  int curr_row, curr_col;
+
+  for(int i = 0; i<n_node_indices; i++){
+    // make sure there is no segmentation fault for bad data
+    // Note: bad data is ignored
+    if(nodeindexvec[i] <= NDataNodes){
+	    retrieve_current_row_and_col(nodeindexvec[i], curr_row, curr_col);
+
+	    if(chan[curr_row][curr_col] == NoDataValue){
+	      chan[curr_row][curr_col] = i;
+	    }
+	    else{
+	      //revisted points will be overwritten, most recent id will be pres
+	      chan[curr_row][curr_col] = i;
+	    }
+	  }
+    else
+	  {
+	    cout << "WARNING: LSDFlowInfo::write_NodeIndexVector_to_LSDIndexRaster"
+	       << " node index does not exist!"<< endl;
+	  }
+  }
+
+  LSDIndexRaster temp_chan(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,chan,GeoReferencingStrings);
+  return temp_chan;
+}
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -2738,13 +2836,12 @@ void LSDFlowInfo::D8_Trace(int i, int j, LSDIndexRaster StreamNetwork, float& le
 // Move the location of the channel head downslope by a user defined distance.
 // Returns A vector of node indexes pointing to the moved heads.
 // SWDG 27/11/15
-vector<int> LSDFlowInfo::MoveChannelHeadDown(vector<int> Sources, float MoveDist){
+
+void LSDFlowInfo::MoveChannelHeadDown(vector<int> Sources, float MoveDist, vector<int>& DownslopeSources, vector<int>& FinalHeads){
 
   float root_2 = 1.4142135623;
 
   float length;
-
-  vector<int> DownSlopeSources;
 
   int receiver_row;
   int receiver_col;
@@ -2763,33 +2860,32 @@ vector<int> LSDFlowInfo::MoveChannelHeadDown(vector<int> Sources, float MoveDist
       //update length
       if (retrieve_flow_length_code_of_node(reciever_node) == 1){ length += DataResolution; }
       else if (retrieve_flow_length_code_of_node(reciever_node) == 2){ length += (DataResolution * root_2); }
+      else if (retrieve_flow_length_code_of_node(reciever_node) == 0){break;}
 
       reciever_node = node;
 
+
     }
 
-    DownSlopeSources.push_back(reciever_node);
+    DownslopeSources.push_back(reciever_node);
+    FinalHeads.push_back(Sources[q]);
 
   }
 
   //end of for loop
-
-  return DownSlopeSources;
 
 }
 
 // Move the location of the channel head upslope by a user defined distance.
 // Returns A vector of node indexes pointing to the moved heads.
 // SWDG 27/11/15
-vector<int> LSDFlowInfo::MoveChannelHeadUp(vector<int> Sources, float MoveDist, LSDRaster DEM){
+void LSDFlowInfo::MoveChannelHeadUp(vector<int> Sources, float MoveDist, LSDRaster DEM, vector<int>& UpslopeSources, vector<int>& FinalHeads){
 
   float root_2 = 1.4142135623;
 
   float length;
 
   Array2D<float> Elevation = DEM.get_RasterData();
-
-  vector<int> UpSlopeSources;
 
   int new_node;
 
@@ -2804,6 +2900,13 @@ vector<int> LSDFlowInfo::MoveChannelHeadUp(vector<int> Sources, float MoveDist, 
     int j;
 
     retrieve_current_row_and_col(Sources[q], i, j);
+
+    //test for channel heads at edges
+    if (i == 0 || i == NRows - 1 || j == 0 || j == NCols - 1){
+      cout << "Hit an edge, skipping" << endl;        
+    }
+
+    else{
 
     while (length < MoveDist){
 
@@ -2886,15 +2989,13 @@ vector<int> LSDFlowInfo::MoveChannelHeadUp(vector<int> Sources, float MoveDist, 
       j = new_j;
 
     }
+}
     new_node = retrieve_node_from_row_and_column(i,j);
 
-    UpSlopeSources.push_back(new_node);
+    UpslopeSources.push_back(new_node);
+    FinalHeads.push_back(Sources[q]);
 
-  }
-
-  //end of for loop
-
-  return UpSlopeSources;
+  } //end of for loop
 
 }
 

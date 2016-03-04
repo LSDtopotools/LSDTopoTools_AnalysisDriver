@@ -166,6 +166,15 @@ class LSDFlowInfo
   /// @date 03/06/14
   void print_vector_of_nodeindices_to_csv_file(vector<int>& nodeindex_vec, string outfilename);
 
+  ///@brief This function takes a vector of node indices and prints a csv 
+  ///file that can be read by arcmap, adding in a unique id to each row, independent of the nodeindex.
+  ///
+  ///@details The unique ID is used to tie triplets of channel heads together for hollow analysis.
+  ///@param nodeindex vec is a vector of nodeindices (which are ints)
+  ///@param outfilename is a string of the filename
+  ///@author SWDG after SMM
+  ///@date 2/2/16
+  void print_vector_of_nodeindices_to_csv_file_Unique(vector<int>& nodeindex_vec, string outfilename);
 
   ///@brief Get the number of pixels flowing into a node.
   ///@param node Integer of node index value.
@@ -280,6 +289,14 @@ class LSDFlowInfo
   /// @author SMM
   /// @date 01/016/12
   LSDIndexRaster write_NodeIndexVector_to_LSDIndexRaster(vector<int>& nodeindexvec);
+
+  /// @brief This function writes an LSDIndesxRaster given a list of node indices, and give every pixel its nodeindex value, which is unique.
+  /// @param nodeindexvec a vector containing node indices one use is to export
+  /// the LSDIndexRaster of pixels that are in the node index vector.
+  /// @return LSDIndexRaster of pixels that are in the node index vector.
+  /// @author SWDG after SMM
+  /// @date 2/2/16
+  LSDIndexRaster write_NodeIndexVector_to_LSDIndexRaster_Unique(vector<int>& nodeindexvec);
 
   ///@brief Write NContributingNodes to an LSDIndexRaster.
   ///@return LSDIndexRaster of number of contributing nodes for each cell.
@@ -635,19 +652,21 @@ class LSDFlowInfo
   /// @brief Move the location of the channel head downslope by a user defined distance.
   /// @param Sources a vector of node indexes of the channel heads to be moved.
   /// @param MoveDist The distance in spatial units the head is to be moved.
-  /// @return A vector of node indexes pointing to the moved heads.
+  /// @param DownslopeSources A vector used to contain the node indexes of the moved channel heads.
+  /// @param FinalHeads A vector containing a subset of the original channel heads which corresponds to the moved heads.
   /// @author SWDG
   /// @date 27/11/15
-  vector<int> MoveChannelHeadDown(vector<int> Sources, float MoveDist);
+  void MoveChannelHeadDown(vector<int> Sources, float MoveDist, vector<int>& DownslopeSources, vector<int>& FinalHeads);
 
   /// @brief Move the location of the channel head upslope by a user defined distance.
   /// @param Sources a vector of node indexes of the channel heads to be moved.
   /// @param MoveDist The distance in spatial units the head is to be moved.
   /// @param DEM the elevation data.
-  /// @return A vector of node indexes pointing to the moved heads.
+  /// @param UpslopeSources A vector used to contain the node indexes of the moved channel heads.
+  /// @param FinalHeads A vector containing a subset of the original channel heads which corresponds to the moved heads.
   /// @author SWDG
   /// @date 27/11/15
-  vector<int> MoveChannelHeadUp(vector<int> Sources, float MoveDist, LSDRaster DEM);
+  void MoveChannelHeadUp(vector<int> Sources, float MoveDist, LSDRaster DEM, vector<int>& UpslopeSources, vector<int>& FinalHeads);
 
   void HilltopFlowRoutingOriginal(LSDRaster Elevation, LSDRaster Hilltops, LSDRaster Slope, LSDRaster Aspect, LSDIndexRaster StreamNetwork);
   
