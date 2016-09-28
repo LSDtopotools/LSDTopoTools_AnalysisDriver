@@ -369,7 +369,24 @@ void LSDAnalysisDriver::ingest_data(string pname, string p_fname)
       cout << "Your curvature_mask_nodataisbelowthreshold is: "  
            <<  int_parameters["curvature_mask_nodataisbelowthreshold"] <<  "; anything other than 0 means true." << endl;
     }
+<<<<<<< HEAD
+    else if (lower == "mask_threshold")
+    {
+      float_parameters["mask_threshold"] = atof(value.c_str());
+      cout << "Mask_threshold is: "  
+           <<  float_parameters["mask_threshold"] <<  " (dimensions depend on raster)" << endl;
+    }
+    else if (lower == "mask_nodataisbelowthreshold")
+    {
+      int_parameters["mask_nodataisbelowthreshold"] = atoi(value.c_str());
+      cout << "Your mask_nodataisbelowthreshold is: "  
+           <<  int_parameters["mask_nodataisbelowthreshold"] <<  "; anything other than 0 means true." << endl;
+    }
+
+
+=======
     
+>>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
     //=-=-=-=-=-=--=-=-=-=-
     // what to write
     //-=-=-=-=-=-=-=-=-=-=-=-
@@ -393,6 +410,13 @@ void LSDAnalysisDriver::ingest_data(string pname, string p_fname)
       analyses_switches["write_hillshade"] = temp_bool;
       raster_switches["need_base_raster"] = temp_bool;
       raster_switches["need_hillshade"] = temp_bool;
+    }
+    else if (lower == "write mask threshold")
+    {
+      bool temp_bool = (value == "true") ? true : false;
+      analyses_switches["write_mask_threshold"] = temp_bool;
+      raster_switches["need_base_raster"] = temp_bool;
+      raster_switches["need_mask_threshold"] = temp_bool;
     }
     else if (lower == "write slope")
     {
@@ -532,7 +556,7 @@ void LSDAnalysisDriver::ingest_data(string pname, string p_fname)
        << "I am now moving on to writing the data. \n\n";
   write_rasters_from_analysis_switches();
 
-  cout << "All done buddy. Have a nice day." << endl;
+  cout << "Well I guess I am all finished now. I sure hope you got what you wanted! Have a nice day." << endl;
 
 
 }
@@ -591,6 +615,17 @@ void LSDAnalysisDriver::compute_rasters_from_raster_switches()
     {
       // it hasn't been calculated. Calculate it now.
       calculate_hillshade();
+    }
+  }
+
+  // get a thresholded map
+  if(raster_switches.find("need_mask_threshold") != raster_switches.end())
+  {
+    // check to see if curvature maskhas already been calculated
+    if(map_of_LSDRasters.find("mask_threshold") == map_of_LSDRasters.end())
+    {
+      // it hasn't been calculated. Calculate it now.
+      calculate_mask_threshold();
     }
   }
 
@@ -870,6 +905,22 @@ void LSDAnalysisDriver::write_rasters_from_analysis_switches()
     string r_fname = write_path+write_fname+r_seperator;
     map_of_LSDRasters["hillshade"].write_raster(r_fname,dem_write_extension);
   }
+
+  // write curvature
+  if(analyses_switches.find("write_mask_threshold") != analyses_switches.end())
+  {
+    // check to see if the slope map exists
+    if(map_of_LSDIndexRasters.find("mask_threshold") == map_of_LSDIndexRasters.end())
+    {
+      //cout << "You've not run the get raster routine. Running now. " << endl;
+      calculate_mask_threshold();
+    }
+
+    string mask_seperator = "_THMASK";
+    string mask_fname = write_path+write_fname+mask_seperator;
+    map_of_LSDRasters["mask_threshold"].write_raster(mask_fname,dem_write_extension);
+  }
+
 
   // write slope
   if(analyses_switches.find("write_slope") != analyses_switches.end())
@@ -1452,6 +1503,79 @@ void LSDAnalysisDriver::calculate_curvature_mask_threshold()
   
   map_of_LSDIndexRasters["curvature_mask_threshold"] = curv_thresh;
 
+}
+
+
+
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// This creates a mask for the curvature
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDAnalysisDriver::calculate_curvature_mask_threshold()
+{
+  bool nodataisbelowthreshold = true;
+  float threshold;
+  
+  if(float_parameters.find("curvature_mask_threshold") == float_parameters.end())
+  {
+    float_parameters["curvature_mask_threshold"] = 0;
+  }
+  threshold = float_parameters["curvature_mask_threshold"];
+  
+  if(int_parameters.find("curvature_mask_nodataisbelowthreshold") == int_parameters.end())
+  {
+    int_parameters["curvature_mask_nodataisbelowthreshold"] = 1;
+    
+    // this just sets the flag to 1 is it is not 0
+    if(int_parameters["curvature_mask_nodataisbelowthreshold"] != 0)
+    {
+      int_parameters["curvature_mask_nodataisbelowthreshold"] = 1;
+      nodataisbelowthreshold = true;
+    }
+    else
+    {
+      nodataisbelowthreshold = false;
+    }
+  }
+  
+  LSDIndexRaster curv_thresh = map_of_LSDRasters["curvature"].mask_to_indexraster_using_threshold(threshold,nodataisbelowthreshold);
+  
+  map_of_LSDIndexRasters["curvature_mask_threshold"] = curv_thresh;
+}
+
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// This makes a mask retaining the original data but masking above or below
+// a threshold
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDAnalysisDriver::calculate_mask_threshold()
+{
+  bool nodataisbelowthreshold = true;
+  float threshold;
+  
+  if(float_parameters.find("mask_threshold") == float_parameters.end())
+  {
+    float_parameters["mask_threshold"] = 0;
+  }
+  threshold = float_parameters["mask_threshold"];
+  
+  if(int_parameters.find("mask_nodataisbelowthreshold") == int_parameters.end())
+  {
+    int_parameters["mask_nodataisbelowthreshold"] = 1;
+    
+    // this just sets the flag to 1 is it is not 0
+    if(int_parameters["curvature_mask_nodataisbelowthreshold"] != 0)
+    {
+      int_parameters["mask_nodataisbelowthreshold"] = 1;
+      nodataisbelowthreshold = true;
+    }
+    else
+    {
+      nodataisbelowthreshold = false;
+    }
+  }
+  
+  LSDRaster mask_thresh = map_of_LSDRasters["base_raster"].mask_to_nodata_using_threshold(threshold,nodataisbelowthreshold);
+  
+  map_of_LSDRasters["mask_threshold"] = mask_thresh;
 }
 
 
@@ -2056,7 +2180,7 @@ void LSDAnalysisDriver::check_file_extensions_and_paths()
   if (dem_read_extension != "asc"  && dem_read_extension != "flt" && dem_read_extension != "bil" &&
       dem_write_extension != "asc"  && dem_write_extension != "flt" && dem_write_extension != "bil")
   {
-    cout << "Line 1006 Raster file extension not assigned! Defaulting to flt format." << endl;
+    cout << "Line 1006 Raster file extension not assigned! Defaulting to bil format." << endl;
     cout << "You entered: " << dem_read_extension << "!" <<endl;
     dem_read_extension = "bil";
     dem_write_extension = "bil";

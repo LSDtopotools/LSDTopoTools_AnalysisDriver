@@ -179,6 +179,14 @@ class LSDAnalysisDriver
     /// @date 09/09/2016
     void calculate_curvature_mask_threshold();
 
+<<<<<<< HEAD
+    /// @brief This calculates a threhsold maks
+    /// @author SMM
+    /// @date 28/09/2016
+    void calculate_mask_threshold();
+
+=======
+>>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
     /// @brief This calculates the LSDFlowInfo object
     /// @author SMM
     /// @date 29/07/2014
