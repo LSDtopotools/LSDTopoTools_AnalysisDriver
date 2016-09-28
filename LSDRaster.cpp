@@ -2732,7 +2732,6 @@ LSDRaster LSDRaster::TopographicShielding(int AzimuthStep, int ZenithStep)
   Algorithm works by adjusting the coordiantes of the DEM to be relative to the azimuth and zenith
   i.e. X-coordinates should be equal along the Azimuth direction and the DEM itself is tilted by
   the angle Zenith toward Azimuth.
-<<<<<<< HEAD
 
   Is interfaced through LSDRaster::TopoShield and LSDRaster::Hillshade, and should not
   be called directly,  to generate a hillshade use LSDRaster::Hillshade.
@@ -2742,17 +2741,6 @@ LSDRaster LSDRaster::TopographicShielding(int AzimuthStep, int ZenithStep)
 
   Outputs an LSDRaster showing areas in the shadow of other topography.
 
-=======
-
-  Is interfaced through LSDRaster::TopoShield and LSDRaster::Hillshade, and should not
-  be called directly,  to generate a hillshade use LSDRaster::Hillshade.
-
-  Takes 2 ints, the zenith angle of the illumination source in degrees from horizontal
-  and the azimuth angle, of the illumination source in degrees.
-
-  Outputs an LSDRaster showing areas in the shadow of other topography.
-
->>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
   Martin Hurst
   February 2015
 
@@ -5254,7 +5242,6 @@ void LSDRaster::mask_to_nodata_below_threshold(float threshold)
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 //
-<<<<<<< HEAD
 // This masks to nodata below or above a threshold value
 //
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -5298,8 +5285,6 @@ LSDRaster  LSDRaster::mask_to_nodata_using_threshold(float threshold,bool belowt
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 //
-=======
->>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
 // This masks to nodata below a threshold value
 //
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-

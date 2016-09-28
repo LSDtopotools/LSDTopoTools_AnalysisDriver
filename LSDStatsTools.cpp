@@ -712,8 +712,6 @@ void quantile_quantile_analysis(vector<float>& data, vector<float>& values, vect
   float centerx = (q25x + q75x)/2;
   float centery = (q25y + q75y)/2;
   float intercept =centery-slope*centerx;
-<<<<<<< HEAD
-=======
   vector<float> mn_vals;
 
   for(int i = 0; i < N_points; ++i)
@@ -721,58 +719,6 @@ void quantile_quantile_analysis(vector<float>& data, vector<float>& values, vect
     mn_vals.push_back(intercept+slope*snv[i]);
   }
 
-  standard_normal_variates=snv;
-  values = vals;
-  mn_values = mn_vals;
-}
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// quantile_quantile_analysis
-// sorts data; produces quartile-quantile comparison against standard normal variate, returning
-// a sorted subsample of N_points, their corresponding normal variate and the reference value
-// from the standard normal distribution
-// DTM 28/11/2014
-// Modified by FJC 03/03/16 to get the percentiles for the normally distributed model as an
-// argument.
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-void quantile_quantile_analysis_defined_percentiles(vector<float>& data, vector<float>& values, vector<float>& standard_normal_variates, vector<float>& mn_values, int N_points, int lower_percentile, int upper_percentile)
-{
-  vector<size_t> index_map;
-  vector<float> data_sorted;
-  matlab_float_sort(data, data_sorted, index_map);
-  float quantile,x;
-  vector<float> snv,vals;
-
-  for(int i = 0; i < N_points; ++i)
-  {
-    quantile = (1.+ float(i))/(float(N_points)+1.);
-    x = (sqrt(2)*inverf(quantile*2-1));
-    vals.push_back(get_percentile(data_sorted, quantile*100));
-    snv.push_back(x);
-  }
-  // CONSTRUCTING NORMALLY DISTRIBUTED MODEL
-  // Now get upper quartile and lower quartile boundaries
-  float q_lower_x = get_percentile(snv,lower_percentile);
-  float q_upper_x = get_percentile(snv,upper_percentile);
-  float q_lower_y = get_percentile(vals,lower_percentile);
-  float q_upper_y = get_percentile(vals,upper_percentile);
-
-  float slope = (q_upper_y-q_lower_y)/(q_upper_x-q_lower_x);
-//   cout << "slope = " << slope << endl;
-  float centerx = (q_lower_x + q_upper_x)/2;
-  float centery = (q_lower_y + q_upper_y)/2;
-  float intercept =centery-slope*centerx;
->>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
-  vector<float> mn_vals;
-
-  for(int i = 0; i < N_points; ++i)
-  {
-    mn_vals.push_back(intercept+slope*snv[i]);
-  }
-
-<<<<<<< HEAD
   standard_normal_variates=snv;
   values = vals;
   mn_values = mn_vals;
@@ -824,8 +770,6 @@ void quantile_quantile_analysis_defined_percentiles(vector<float>& data, vector<
     mn_vals.push_back(intercept+slope*snv[i]);
   }
 
-=======
->>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
   standard_normal_variates=snv;
   values = vals;
   mn_values = mn_vals;
@@ -4674,42 +4618,6 @@ vector<float> Unique(vector<float> InputVector){
 
   matlab_float_sort(InputVector, OutputVector, index_map);
 
-<<<<<<< HEAD
-=======
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-//Return unique values from a vector of ints.
-//Wrapper around the std library unique method which also resizes the output vector.
-// SWDG - 22/7/16
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-vector<int> Unique(vector<int> InputVector){
-
-  vector<int> OutputVector;
-  vector<size_t> index_map;
-
-  matlab_int_sort(InputVector, OutputVector, index_map);
-
-  vector<int>::iterator it;
-  it = unique(OutputVector.begin(), OutputVector.end());
-
-  OutputVector.resize(distance(OutputVector.begin(),it));
-
-  return OutputVector;
-
-}
-
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-//Return unique values from a vector of floats.
-//Wrapper around the std library unique method which also resizes the output vector.
-// SWDG - 22/7/16
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-vector<float> Unique(vector<float> InputVector){
-
-  vector<float> OutputVector;
-  vector<size_t> index_map;
-
-  matlab_float_sort(InputVector, OutputVector, index_map);
-
->>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
   vector<float>::iterator it;
   it = unique(OutputVector.begin(), OutputVector.end());
 

@@ -369,7 +369,6 @@ void LSDAnalysisDriver::ingest_data(string pname, string p_fname)
       cout << "Your curvature_mask_nodataisbelowthreshold is: "  
            <<  int_parameters["curvature_mask_nodataisbelowthreshold"] <<  "; anything other than 0 means true." << endl;
     }
-<<<<<<< HEAD
     else if (lower == "mask_threshold")
     {
       float_parameters["mask_threshold"] = atof(value.c_str());
@@ -384,9 +383,6 @@ void LSDAnalysisDriver::ingest_data(string pname, string p_fname)
     }
 
 
-=======
-    
->>>>>>> 0acd396113e4fae23fc3906f39afa05258dc66e3
     //=-=-=-=-=-=--=-=-=-=-
     // what to write
     //-=-=-=-=-=-=-=-=-=-=-=-
@@ -1469,42 +1465,6 @@ void LSDAnalysisDriver::calculate_polyfit()
     got_polyfit = true;
   }
 }
-
-
-
-void LSDAnalysisDriver::calculate_curvature_mask_threshold()
-{
-  bool nodataisbelowthreshold = true;
-  float threshold;
-  
-  if(float_parameters.find("curvature_mask_threshold") == float_parameters.end())
-  {
-    float_parameters["curvature_mask_threshold"] = 0;
-  }
-  threshold = float_parameters["curvature_mask_threshold"];
-  
-  if(int_parameters.find("curvature_mask_nodataisbelowthreshold") == int_parameters.end())
-  {
-    int_parameters["curvature_mask_nodataisbelowthreshold"] = 1;
-    
-    // this just sets the flag to 1 is it is not 0
-    if(int_parameters["curvature_mask_nodataisbelowthreshold"] != 0)
-    {
-      int_parameters["curvature_mask_nodataisbelowthreshold"] = 1;
-      nodataisbelowthreshold = true;
-    }
-    else
-    {
-      nodataisbelowthreshold = false;
-    }
-  }
-  
-  LSDIndexRaster curv_thresh = map_of_LSDRasters["curvature"].mask_to_indexraster_using_threshold(threshold,nodataisbelowthreshold);
-  
-  map_of_LSDIndexRasters["curvature_mask_threshold"] = curv_thresh;
-
-}
-
 
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
