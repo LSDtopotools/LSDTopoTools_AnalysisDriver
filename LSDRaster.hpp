@@ -253,13 +253,13 @@ class LSDRaster
   /// @result The myLSDRasterobject.RasterData_dbl data member is now populated with an array of
   /// the DEM data. The data members for NCols, NRows, etc. are also updated.
   void read_ascii_raster(string FILENAME);
-  
+
   /// @brief Reads a raster of integers and populates LSDRaster integer array member data
   /// @author DAV
   /// @todo Really, one ought to modify LSDRaster so that it is a class template, and then
-  /// wouldn't need different TNT Array data members for when we have floats, double, ints 
-  /// etc. Might be tricky though, although if done carefully it should not break 
-  /// peoples code. 
+  /// wouldn't need different TNT Array data members for when we have floats, double, ints
+  /// etc. Might be tricky though, although if done carefully it should not break
+  /// peoples code.
   void read_ascii_raster_integers(string FILENAME);
 
   /// @brief Read a raster from memory to a file.
@@ -292,13 +292,13 @@ class LSDRaster
   /// @author DAV
   /// @date 07-12-2015
   void write_double_raster(string filename, string extension);
-  
+
   /// @brief Writes out a double array to an ascii
   void write_double_asc_raster(string string_filename);
-  
+
   /// @brief Writes out a double array to a binary flt file
   void write_double_flt_raster(string filename, string string_filename);
-  
+
   /// @brief Writes out a double array to a ENVI bil file (untested!)
   /// @bug Unlikely to work as Georeferencing not set. DAV to fix.
   void write_double_bil_raster(string filename, string string_filename);
@@ -448,6 +448,12 @@ class LSDRaster
   ///@date 06/11/15
   vector<float> get_RasterData_vector();
 
+	///@brief This function returns the raster data as text file
+  ///@return text file with raster data
+  ///@author FJC
+  ///@date 30/09/16
+	void write_RasterData_to_text_file(string filename);
+
   /// @brief rewrite all the data array values with random numbers (with a
   /// uniform distribution).
   /// @param range is the range of values.
@@ -571,6 +577,40 @@ class LSDRaster
   /// @author SMM
   /// @date 06/05/2015
   void raster_multiplier(float multiplier);
+
+
+  /// @brief This multiplies two rasters, elementwise
+  /// @detail Simple elementwise multiplictation
+  /// @param M_raster The raster by which to multiply the current raster
+  /// @return A raster holding the elementwise product of the two rasters
+  /// @author SMM
+  /// @date 27/10/2016
+  LSDRaster MapAlgebra_multiply(LSDRaster& M_raster);
+
+  /// @brief This divides two rasters, elementwise
+  /// @detail Simple elementwise division
+  /// @param M_raster The raster by which to divide the current raster
+  /// @return A raster holding the elementwise quotient of the two rasters
+  /// @author SMM
+  /// @date 27/10/2016
+  LSDRaster MapAlgebra_divide(LSDRaster& M_raster);
+
+  /// @brief This add two rasters, elementwise
+  /// @detail Simple elementwise addition
+  /// @param M_raster The raster by which to add the current raster
+  /// @return A raster holding the elementwise sum of the two rasters
+  /// @author SMM
+  /// @date 27/10/2016
+  LSDRaster MapAlgebra_add(LSDRaster& M_raster);
+
+  /// @brief This subtracts two rasters, elementwise
+  /// @detail Simple elementwise subtraction
+  /// @param M_raster The raster by which to subtract the current raster
+  /// @return A raster holding the elementwise difference of the two rasters
+  /// @author SMM
+  /// @date 27/10/2016
+  LSDRaster MapAlgebra_subtract(LSDRaster& M_raster);
+
 
   // Functions for the Diamond Square algorithm
 
@@ -1179,7 +1219,7 @@ class LSDRaster
 
   /// @brief This function changes any data point either above or below threshold to NoDataValue
   /// @param threshold The threshold value
-  /// @param belowthresholdisnodata a boolean that if true means anything below the 
+  /// @param belowthresholdisnodata a boolean that if true means anything below the
   ///   threshold turns to nodata
   /// @return Returns the masked raster
   /// @author SMM
@@ -1189,13 +1229,13 @@ class LSDRaster
   /// @brief This function creats an LSDIndexRaster mask (with true == 1 and otherwise nodata)
   /// from an LSDRaster. Can mask either above or below a threshold
   /// @param threshold The threshold value
-  /// @param belowthresholdisnodata a boolean that if true means anything below the 
+  /// @param belowthresholdisnodata a boolean that if true means anything below the
   ///   threshold turns to nodata
   /// @return Returns the mask
   /// @author SMM
   /// @date 9/9/2016
   LSDIndexRaster mask_to_indexraster_using_threshold(float threshold,bool belowthresholdisnodata);
-  
+
   /// @brief This function masks a raster to nodata based on a mask value and
   /// a mask raster
   /// @param Mask_raster the LSDIndexRaster that contains the mask
@@ -1942,6 +1982,22 @@ class LSDRaster
   /// @author SMM
   /// @date 09/12/2014
   LSDRaster alternating_direction_nodata_fill_with_trimmer(int window_width);
+	
+	/// @brief Function to fill in no data holes in an irregular raster. Pixel must have 
+	/// all neighbours not equal to no data value within the specified window radius.  Data is 
+	/// filled based on mean of pixels within the window radius.
+	LSDRaster nodata_fill_irregular_raster(int window_radius);
+	
+	/// @brief A routine that fills nodata holes. Modified by FJC to only fill holes
+	/// surrounded in all directions by pixels with valid elevation values
+  /// @detail The routine sweeps the raster looking for nodata and filling
+  ///  this nodata with an average value from surrounding nodes. The sweeping
+  ///  changes directions, four sweep directions in all (+ rows, - rows, + cols, -cols)
+  /// @param window_size the number of pixles around the centre pixel to take the
+  ///  spatial average
+  /// @author FJC
+  /// @date 09/12/2014
+	LSDRaster alternating_direction_nodata_fill_irregular_raster(int window_width);
 
   /// @brief Function to create a masked LSDIndexRaster raster based on a conditional statement
   /// @param string Condition ("<", ">", "==", "!=")
@@ -2017,8 +2073,8 @@ class LSDRaster
   /// @date 9/2/15
   void FlattenToFile(string FileName);
 
-  /// @brief Method to flatten an LSDRaster to a text file, with a sigle value on each line.
   /// @brief Method to flatten an LSDRaster and place the non NDV values in a csv file.
+  ///
   /// @detail Each value is placed on its own line, so that it can be read more quickly in python etc.
   ///   It includes the x and y locations so it can be read by GIS software
   /// @param FileName_prefix The prefix of the file to write, if no path is included it will write to the current directory.
@@ -2026,6 +2082,16 @@ class LSDRaster
   /// @author SMM
   /// @date 29/6/15
   void FlattenToCSV(string FileName);
+
+  /// @brief Method to flatten an LSDRaster and place the non NDV values in a csv file.
+  ///
+  /// @detail Each value is placed on its own line, so that it can be read more quickly in python etc.
+  ///   It includes the lat long coordinates in CSV
+  /// @param FileName_prefix The prefix of the file to write, if no path is included it will write to the current directory.
+  ///  The csv extension is added automatically.
+  /// @author SMM
+  /// @date 12/11/16
+  void FlattenToWGS84CSV(string FileName);
 
   /// @brief Simple method to remove any values below a user supplied value from an LSDRaster.
   /// @param Value float of the threshold below which values will be removed.
@@ -2050,6 +2116,13 @@ class LSDRaster
   /// @author SWDG
   /// @date 24/07/2015
   LSDIndexRaster ConvertToBinary(int Value, int ndv);
+
+	/// @brief Method to merge data from two LSDRasters WITH SAME EXTENT together.  /// The data from the raster specified as an argument will be added (will
+	/// overwrite the original raster if there is a conflict).
+  /// @param RasterToAdd second raster to add to original raster
+  /// @author FJC
+  /// @date 30/09/16
+	LSDRaster MergeRasters(LSDRaster& RasterToAdd);
 
   /// @brief Function to get potential floodplain patches using a slope and relief threshold
   /// @param Relief raster with relief values
@@ -2103,7 +2176,28 @@ class LSDRaster
   /// @author SWDG
   /// @date 9/6/16
   LSDRaster PoupulateRasterSingleValue(float value);
-  
+
+  /// @brief Write CHT and hilltop gradient data to a *.csv file, coded by UTM coordinates as well as lat/long.
+  ///
+  /// @detail Pass in a CHT raster, CHT raster that has been filtered by gradient, a slope raster, a filename and some
+  /// spatial reference information used to generate Lat Long values.
+  ///
+  /// The code outputs a csv to the filename specified with the header structure:
+  ///
+  ///  "_ID,Easting,Northing,Lat,Long,CHT,gradient_flag,gradient"
+  ///
+  /// Where the gradient_flag is a binary switch where 0 == above threshold and 1 == below threshold.
+  /// @param CHT LSDRaster of the hilltop curvature.
+  /// @param CHT_gradient LSDRaster of the hilltop curvature, filtered by a gradient threshold.
+  /// @param gradient LSDRaster of the topographic gradient.
+  /// @param UTMZone The UTM zone the data falls in.
+  /// @param isNorth Boolean set to true if the data are in the northern hemisphere and false if not.
+  /// @param eId The ellipsoid ID, see LSDCoordinateConverterLLandUTM for details, WGS84 is 22.
+  /// @param filename A string containing a path and filename to write the data to.
+  /// @author SWDG
+  /// @date 2/11/16
+  void HilltopsToCSV(LSDRaster& CHT, LSDRaster& CHT_gradient, LSDRaster& gradient, int UTMZone, bool isNorth, int eId, string filename);
+
 protected:
 
   ///Number of rows.

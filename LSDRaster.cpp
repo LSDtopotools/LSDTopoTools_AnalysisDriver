@@ -221,7 +221,7 @@ void LSDRaster::create(int nrows, int ncols, float xmin, float ymin,
   YMinimum = ymin;
   DataResolution = cellsize;
   NoDataValue = ndv;
-  
+
   //cout << "Now for the georeferencing strings" << endl;
   GeoReferencingStrings = temp_GRS;
   //cout << "Got them! " << endl;
@@ -1187,7 +1187,7 @@ void LSDRaster::write_double_bil_raster(string filename, string string_filename)
       data_ofs.write(reinterpret_cast<char *>(&temp),sizeof(temp));
     }
   }
-  data_ofs.close();  
+  data_ofs.close();
 }
 
 
@@ -1249,7 +1249,7 @@ void LSDRaster::write_double_raster(string filename, string extension)
     cout << "You did not enter an approprate extension!" << endl
     << "You entered: " << extension << " options are asc, flt, bil (bil might not work yet though...)" << endl;
     exit(EXIT_FAILURE);
-  }  
+  }
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
@@ -2083,6 +2083,160 @@ void LSDRaster::raster_multiplier(float multiplier)
   }
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Map algebra functions
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+LSDRaster LSDRaster::MapAlgebra_multiply(LSDRaster& M_raster)
+{
+  // first check if rasters are the same size
+  if( does_raster_have_same_dimensions(M_raster) )
+  {
+    //create an array
+    Array2D<float> New_array(NRows,NCols,NoDataValue);
+
+    for(int row = 0; row< NRows; row++)
+    {
+      for(int col = 0; col<NCols; col++)
+      {
+        if (RasterData[row][col] != NoDataValue)
+        {
+          float this_element = M_raster.get_data_element(row,col);
+          if(this_element != NoDataValue)
+          {
+            New_array[row][col] = RasterData[row][col]*this_element;
+          }
+
+        }
+      }
+    }
+    //create LSDRaster object
+    LSDRaster NewRaster(NRows, NCols, XMinimum, YMinimum, DataResolution,
+                               NoDataValue, New_array, GeoReferencingStrings);
+    return NewRaster;
+  }
+  else
+  {
+    cout << "Warning, these rasters are not the same dimension!" << endl;
+    return M_raster;
+  }
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+LSDRaster LSDRaster::MapAlgebra_divide(LSDRaster& M_raster)
+{
+  // first check if rasters are the same size
+  if( does_raster_have_same_dimensions(M_raster) )
+  {
+    //create an array
+    Array2D<float> New_array(NRows,NCols,NoDataValue);
+
+    for(int row = 0; row< NRows; row++)
+    {
+      for(int col = 0; col<NCols; col++)
+      {
+        if (RasterData[row][col] != NoDataValue)
+        {
+          float this_element = M_raster.get_data_element(row,col);
+          if(this_element != NoDataValue && this_element != 0)
+          {
+            New_array[row][col] = RasterData[row][col]/this_element;
+          }
+        }
+      }
+    }
+    //create LSDRaster object
+    LSDRaster NewRaster(NRows, NCols, XMinimum, YMinimum, DataResolution,
+                               NoDataValue, New_array, GeoReferencingStrings);
+    return NewRaster;
+  }
+  else
+  {
+    cout << "Warning, these rasters are not the same dimension!" << endl;
+    return M_raster;
+  }
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+LSDRaster LSDRaster::MapAlgebra_add(LSDRaster& M_raster)
+{
+  // first check if rasters are the same size
+  if( does_raster_have_same_dimensions(M_raster) )
+  {
+    //create an array
+    Array2D<float> New_array(NRows,NCols,NoDataValue);
+
+    for(int row = 0; row< NRows; row++)
+    {
+      for(int col = 0; col<NCols; col++)
+      {
+        if (RasterData[row][col] != NoDataValue)
+        {
+          float this_element = M_raster.get_data_element(row,col);
+          if(this_element != NoDataValue)
+          {
+            New_array[row][col] = RasterData[row][col]+this_element;
+          }
+        }
+      }
+    }
+    //create LSDRaster object
+    LSDRaster NewRaster(NRows, NCols, XMinimum, YMinimum, DataResolution,
+                               NoDataValue, New_array, GeoReferencingStrings);
+    return NewRaster;
+  }
+  else
+  {
+    cout << "Warning, these rasters are not the same dimension!" << endl;
+    return M_raster;
+  }
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+LSDRaster LSDRaster::MapAlgebra_subtract(LSDRaster& M_raster)
+{
+  // first check if rasters are the same size
+  if( does_raster_have_same_dimensions(M_raster) )
+  {
+    //create an array
+    Array2D<float> New_array(NRows,NCols,NoDataValue);
+
+    for(int row = 0; row< NRows; row++)
+    {
+      for(int col = 0; col<NCols; col++)
+      {
+        if (RasterData[row][col] != NoDataValue)
+        {
+          float this_element = M_raster.get_data_element(row,col);
+          if(this_element != NoDataValue)
+          {
+            New_array[row][col] = RasterData[row][col]-this_element;
+          }
+        }
+      }
+    }
+    //create LSDRaster object
+    LSDRaster NewRaster(NRows, NCols, XMinimum, YMinimum, DataResolution,
+                               NoDataValue, New_array, GeoReferencingStrings);
+    return NewRaster;
+  }
+  else
+  {
+    cout << "Warning, these rasters are not the same dimension!" << endl;
+    return M_raster;
+  }
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -5275,7 +5429,7 @@ LSDRaster  LSDRaster::mask_to_nodata_using_threshold(float threshold,bool belowt
       }
     }
   }
-  
+
   LSDRaster NDR(NRows,NCols,XMinimum,YMinimum,DataResolution,
                              NoDataValue,NewArray,GeoReferencingStrings);
   return NDR;
@@ -5290,10 +5444,10 @@ LSDRaster  LSDRaster::mask_to_nodata_using_threshold(float threshold,bool belowt
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 LSDIndexRaster LSDRaster::mask_to_indexraster_using_threshold(float threshold,bool belowthresholdisnodata)
 {
-  
+
   // create the array for the index raster
   Array2D<int> NewIndexArray(NRows,NCols,int(NoDataValue));
-  
+
   for(int row = 0; row<NRows; row++)
   {
     for(int col = 0; col<NCols; col++)
@@ -5327,7 +5481,7 @@ LSDIndexRaster LSDRaster::mask_to_indexraster_using_threshold(float threshold,bo
       }
     }
   }
-  
+
   LSDIndexRaster NDR(NRows,NCols,XMinimum,YMinimum,DataResolution,
                              NoDataValue,NewIndexArray,GeoReferencingStrings);
   return NDR;
@@ -8808,7 +8962,7 @@ LSDRaster LSDRaster::RasterTrimmerSpiral()
       AllBordersFound = true;
     }
   }
-  
+
   if (AllBordersFound == false)
   {
     cout << "Couldn't trim your raster, sorry! Returning original raster" << endl;
@@ -8857,7 +9011,7 @@ LSDRaster LSDRaster::RasterTrimmerSpiral()
         {
           cout << "Col is too big, prepare for seg fault!" << endl;
         }
-        
+
         if(TrimmedRow >= new_row_dimension)
         {
           cout << "TrimmedRow is too big, prepare for seg fault!" << endl;
@@ -8866,8 +9020,8 @@ LSDRaster LSDRaster::RasterTrimmerSpiral()
         {
           cout << "TrimmedCol is too big, prepare for seg fault!" << endl;
         }
-        
-                
+
+
         TrimmedData[TrimmedRow][TrimmedCol] = RasterData[row][col];
         ++TrimmedCol;
       }
@@ -8889,9 +9043,9 @@ LSDRaster LSDRaster::RasterTrimmerSpiral()
     cout << "DataResolution: " << DataResolution << " NDV: " << NoDataValue << endl;
     //cout << GeoReferencingStrings[0] << endl;
     //cout << GeoReferencingStrings[1] << endl;
-    
+
     cout << "Size of data, Rows " << TrimmedData.dim1() << " Cols: " << TrimmedData.dim2() << endl;
-    
+
     LSDRaster TrimmedRaster(new_row_dimension, new_col_dimension, new_XLL,
                         new_YLL, DataResolution, NoDataValue, TrimmedData, GeoReferencingStrings);
 
@@ -9085,6 +9239,43 @@ vector<float> LSDRaster::get_RasterData_vector()
   }
 
   return Raster_vector;
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// This function writes the raster data (where != NoDataValue) to a text file
+// FJC 30/09/16
+//
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDRaster::write_RasterData_to_text_file(string filename)
+{
+	string string_filename;
+  string dot = ".";
+	string extension = "txt";
+  string_filename = filename+dot+extension;
+  cout << "The filename is " << string_filename << endl;
+
+	// open the data file
+  ofstream data_out(string_filename.c_str());
+
+	if( data_out.fail() )
+	{
+		cout << "\nFATAL ERROR: unable to write to " << string_filename << endl;
+		exit(EXIT_FAILURE);
+	}
+
+	data_out << "row col raster_data" << endl;
+	for (int row = 0; row < NRows; row++)
+	{
+		for (int col =0; col < NCols; col++)
+		{
+			if (RasterData[row][col] != NoDataValue)
+			{
+				data_out << row << " " << col << " " << RasterData[row][col] << endl;
+			}
+		}
+	}
+
+	data_out.close();
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -10237,7 +10428,7 @@ LSDIndexRaster LSDRaster::Create_Mask(string Condition, float TestValue)
       }
     }
   }
-  LSDIndexRaster MaskRaster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,Mask);
+  LSDIndexRaster MaskRaster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,Mask,GeoReferencingStrings);
   return MaskRaster;
 }
 
@@ -10266,7 +10457,7 @@ LSDRaster LSDRaster::ExtractByMask(LSDIndexRaster Mask)
       }
     }
   }
-  LSDRaster MaskedRaster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,MaskedArray);
+  LSDRaster MaskedRaster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,MaskedArray,GeoReferencingStrings);
   return MaskedRaster;
 }
 
@@ -10711,6 +10902,550 @@ LSDRaster LSDRaster::alternating_direction_nodata_fill_with_trimmer(int window_w
   return nodata_filled;
 }
 
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Fill no data in an irregular raster
+// No data values must have all neighbours within the window radius != NDV.  Local
+// mean of all pixels in the window radius.
+// FJC 04/11/16
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+LSDRaster LSDRaster::nodata_fill_irregular_raster(int window_radius)
+{
+  int pixel_radius = int(window_radius/DataResolution);
+  if (window_radius < DataResolution) window_radius = DataResolution;
+  Array2D<float> RasterArray = RasterData;
+
+  Array2D<float> FilledRaster(NRows, NCols, NoDataValue);
+  //search the neighbours of each pixel for 0 values within the window radius
+  for (int row = 0; row < NRows; row ++)
+  {
+    for (int col = 0; col < NCols; col++)
+    {
+      if (RasterArray[row][col] != NoDataValue) FilledRaster[row][col] = RasterArray[row][col];
+      if (RasterArray[row][col] == NoDataValue)
+      {
+        vector<int> counts(8,0);
+				float total_elev = 0;
+				int n_obs = 0;
+        for (int i = 1; i <= pixel_radius; i++)
+        {
+          //set exceptions for first or last row
+          int min_row = row-i;
+          int max_row = row+i;
+          if (min_row < 0) min_row = 0;
+          if (max_row >= NRows) max_row = NRows-1;
+          
+          //set exceptions for first or last col
+          int min_col = col-i;
+          int max_col = col+i;
+          if (min_col < 0) min_col = 0;
+          if (max_col >= NCols) max_col = NCols-1;
+          
+          //check whether surrounding pixels in all directions are equal to 0
+          if (RasterArray[min_row][min_col]  != NoDataValue) {
+						counts.at(0) = 1;
+						total_elev += RasterArray[min_row][min_col];
+						n_obs++;
+					}
+          if (RasterArray[row][min_col]  != NoDataValue) {
+						counts.at(1) = 1; 
+						total_elev += RasterArray[row][min_col];
+						n_obs++;
+					}
+          if (RasterArray[max_row][min_col]  != NoDataValue) {
+						counts.at(2) = 1; 
+						total_elev += RasterArray[max_row][min_col];
+						n_obs++;
+					}
+          if (RasterArray[min_row][col]  != NoDataValue) {
+						counts.at(3) = 1;
+						total_elev += RasterArray[min_row][col];
+						n_obs++;
+					}  
+          if (RasterArray[min_row][max_col]  != NoDataValue) {
+						counts.at(4) = 1;
+						total_elev += RasterArray[min_row][max_col];
+						n_obs++;
+					}  
+          if (RasterArray[row][max_col]  != NoDataValue) {
+						counts.at(5) = 1; 
+						total_elev += RasterArray[row][max_col];
+						n_obs++;
+					}
+          if (RasterArray[max_row][max_col]  != NoDataValue) {
+						counts.at(6) = 1; 
+						total_elev += RasterArray[max_row][max_col];
+						n_obs++;
+					}
+          if (RasterArray[max_row][col] != NoDataValue) {
+						counts.at(7) = 1; 
+						total_elev += RasterArray[max_row][col];
+						n_obs++;
+					}
+          
+          // if 1s surround the pixel, then fill in the pixel
+          if (counts.at(0) > 0 && counts.at(1) > 0 && counts.at(2) > 0 && counts.at(3) > 0 && counts.at(4) > 0 && counts.at(5) > 0 && counts.at(6) > 0 && counts.at(7) > 0) 
+          {
+						FilledRaster[row][col] = total_elev/n_obs;
+            i = pixel_radius+1;
+          } 
+        }
+      }
+    }
+  }
+  
+  //create new LSDIndexRaster with the filled patches
+  LSDRaster FilledDEM(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,FilledRaster,GeoReferencingStrings);
+  return FilledDEM;  
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// This is a slightly more complex nodata filler
+// you should run the raster trimmer before invoking this
+// SMM
+// 09/12/2014
+//
+// UPDATE - modification of original function to only fill internal no data voids
+// This is because the raster trimmer won't work on irregular rasters. Holes are only filled if they are surrounded in all directions by pixels with a valid elevation value within the given window width.
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+LSDRaster LSDRaster::alternating_direction_nodata_fill_irregular_raster(int window_width)
+{
+
+  // check argument
+  if(window_width <1)
+  {
+    cout << "You need a positive window width, defaulting to 1" << endl;
+    window_width = 1;
+  }
+
+  cout << "Sweeping nodata, window width is: " << window_width << endl;
+
+  // This function loops in alternating directions until there is no more nodata
+  float total_elev;
+  int n_obs;
+
+  // set up data to be
+  Array2D<float> this_sweep_data = RasterData.copy();;
+  Array2D<float> updated_raster;
+
+  // set the sweep number to 0
+  int nsweep = 0;
+
+  do
+  {
+    cout << "LINE 8268, Sweep number: " << nsweep << endl;
+    cout << "Line 8275, switch is: " << nsweep%4 << endl;
+
+    // copy over the updated raster
+    updated_raster = this_sweep_data.copy();
+
+    // now run a sweep
+    switch(nsweep%4)
+    {
+      case(0):
+      {
+        // sweep 0
+        for (int row=0; row<NRows; ++row)
+        {
+          for(int col=0; col<NCols; ++col)
+          {
+            // if the node contains nodata, search the surrounding nodes
+            if(updated_raster[row][col] == NoDataValue)
+            {
+              total_elev = 0;
+              n_obs = 0;
+							vector<int> counts(8,0);
+							
+							for (int i = 1; i < window_width; i++) 
+							{							
+								//set exceptions for first or last row
+								int min_row = row-i;
+								int max_row = row+i;
+								if (min_row < 0) min_row = 0;
+								if (max_row >= NRows) max_row = NRows-1;
+
+								//set exceptions for first or last col
+								int min_col = col-i;
+								int max_col = col+i;
+								if (min_col < 0) min_col = 0;
+								if (max_col >= NCols) max_col = NCols-1;
+								
+								//check whether surrounding pixels in all directions are equal to 0
+								if (updated_raster[min_row][min_col]  != NoDataValue) {
+									if (counts.at(0) == 0) {
+										total_elev += updated_raster[min_row][min_col];
+										n_obs++;
+										counts.at(0) = 1;
+									}
+								}
+								if (updated_raster[row][min_col]  != NoDataValue) {
+									if (counts.at(1) == 0) {
+										total_elev += updated_raster[row][min_col];
+										n_obs++;
+										counts.at(1) = 1;
+									}
+								}
+								if (updated_raster[max_row][min_col]  != NoDataValue) {
+									if (counts.at(2) == 0) {
+										total_elev += updated_raster[max_row][min_col];
+										n_obs++;
+										counts.at(2) = 1;
+									}
+								}
+								if (updated_raster[min_row][col]  != NoDataValue) {
+									if (counts.at(3) == 0) {
+										total_elev += updated_raster[min_row][col];
+										n_obs++;
+										counts.at(3) = 1;
+									}
+								}  
+								if (updated_raster[min_row][max_col]  != NoDataValue) {
+									if (counts.at(4) == 0) {
+										total_elev += updated_raster[min_row][max_col];
+										n_obs++;
+										counts.at(4) = 1;
+									}
+								}  
+								if (updated_raster[row][max_col]  != NoDataValue) {
+									if (counts.at(5) == 0) {
+										total_elev += updated_raster[row][max_col];
+										n_obs++;
+										counts.at(5) = 1;
+									}
+								}
+								if (updated_raster[max_row][max_col]  != NoDataValue) {
+									if (counts.at(6) == 0) {
+										total_elev += updated_raster[max_row][max_col];
+										n_obs++;
+										counts.at(6) = 1;
+									}
+								}
+								if (updated_raster[max_row][col] != NoDataValue) {
+									if (counts.at(7) == 0) {
+										total_elev += updated_raster[max_row][col];
+										n_obs++;
+										counts.at(7) = 1;
+									}
+								}
+								
+								// if 1s surround the pixel, then fill in the pixel
+								if (counts.at(0) > 0 && counts.at(1) > 0 && counts.at(2) > 0 && counts.at(3) > 0 && counts.at(4) > 0 && counts.at(5) > 0 && counts.at(6) > 0 && counts.at(7) > 0) 
+								{
+									//cout << "total elev: " << total_elev << " N obs: " << n_obs << endl;
+									this_sweep_data[row][col] = total_elev/float(n_obs);
+									i = window_width+1;
+								}
+							}	
+						}						 
+					}
+	 		 	}
+        break;
+      }
+      case(1):
+      {
+        // sweep 1
+        for (int col=0; col<NCols; ++col)
+        {
+          for(int row=0; row<NRows; ++row)
+          {
+            // if the node contains nodata, search the surrounding nodes
+            if(updated_raster[row][col] == NoDataValue)
+            {
+              total_elev = 0;
+              n_obs = 0;
+							vector<int> counts(8,0);
+							
+							for (int i = 1; i < window_width; i++) 
+							{							
+								//set exceptions for first or last row
+								int min_row = row-i;
+								int max_row = row+i;
+								if (min_row < 0) min_row = 0;
+								if (max_row >= NRows) max_row = NRows-1;
+
+								//set exceptions for first or last col
+								int min_col = col-i;
+								int max_col = col+i;
+								if (min_col < 0) min_col = 0;
+								if (max_col >= NCols) max_col = NCols-1;
+								
+									//check whether surrounding pixels in all directions are equal to 0
+								if (updated_raster[min_row][min_col]  != NoDataValue) {
+									if (counts.at(0) == 0) {
+										total_elev += updated_raster[min_row][min_col];
+										n_obs++;
+										counts.at(0) = 1;
+									}
+								}
+								if (updated_raster[row][min_col]  != NoDataValue) {
+									if (counts.at(1) == 0) {
+										total_elev += updated_raster[row][min_col];
+										n_obs++;
+										counts.at(1) = 1;
+									}
+								}
+								if (updated_raster[max_row][min_col]  != NoDataValue) {
+									if (counts.at(2) == 0) {
+										total_elev += updated_raster[max_row][min_col];
+										n_obs++;
+										counts.at(2) = 1;
+									}
+								}
+								if (updated_raster[min_row][col]  != NoDataValue) {
+									if (counts.at(3) == 0) {
+										total_elev += updated_raster[min_row][col];
+										n_obs++;
+										counts.at(3) = 1;
+									}
+								}  
+								if (updated_raster[min_row][max_col]  != NoDataValue) {
+									if (counts.at(4) == 0) {
+										total_elev += updated_raster[min_row][max_col];
+										n_obs++;
+										counts.at(4) = 1;
+									}
+								}  
+								if (updated_raster[row][max_col]  != NoDataValue) {
+									if (counts.at(5) == 0) {
+										total_elev += updated_raster[row][max_col];
+										n_obs++;
+										counts.at(5) = 1;
+									}
+								}
+								if (updated_raster[max_row][max_col]  != NoDataValue) {
+									if (counts.at(6) == 0) {
+										total_elev += updated_raster[max_row][max_col];
+										n_obs++;
+										counts.at(6) = 1;
+									}
+								}
+								if (updated_raster[max_row][col] != NoDataValue) {
+									if (counts.at(7) == 0) {
+										total_elev += updated_raster[max_row][col];
+										n_obs++;
+										counts.at(7) = 1;
+									}
+								}
+								
+								// if 1s surround the pixel, then fill in the pixel
+								if (counts.at(0) > 0 && counts.at(1) > 0 && counts.at(2) > 0 && counts.at(3) > 0 && counts.at(4) > 0 && counts.at(5) > 0 && counts.at(6) > 0 && counts.at(7) > 0) 
+								{
+									this_sweep_data[row][col] = total_elev/float(n_obs);
+									i = window_width+1;
+								}
+							}							
+						}						 
+					}
+	 		 	}
+        break;
+      }
+      case(2):
+      {
+        // sweep 2
+        for (int row=0; row<NRows; ++row)
+        {
+          for(int col=NCols-1; col>0; --col)
+          {
+           // if the node contains nodata, search the surrounding nodes
+            if(updated_raster[row][col] == NoDataValue)
+            {
+              total_elev = 0;
+              n_obs = 0;
+							vector<int> counts(8,0);
+							
+							for (int i = 1; i < window_width; i++) 
+							{							
+								//set exceptions for first or last row
+								int min_row = row-i;
+								int max_row = row+i;
+								if (min_row < 0) min_row = 0;
+								if (max_row >= NRows) max_row = NRows-1;
+
+								//set exceptions for first or last col
+								int min_col = col-i;
+								int max_col = col+i;
+								if (min_col < 0) min_col = 0;
+								if (max_col >= NCols) max_col = NCols-1;
+								
+									//check whether surrounding pixels in all directions are equal to 0
+								if (updated_raster[min_row][min_col]  != NoDataValue) {
+									if (counts.at(0) == 0) {
+										total_elev += updated_raster[min_row][min_col];
+										n_obs++;
+										counts.at(0) = 1;
+									}
+								}
+								if (updated_raster[row][min_col]  != NoDataValue) {
+									if (counts.at(1) == 0) {
+										total_elev += updated_raster[row][min_col];
+										n_obs++;
+										counts.at(1) = 1;
+									}
+								}
+								if (updated_raster[max_row][min_col]  != NoDataValue) {
+									if (counts.at(2) == 0) {
+										total_elev += updated_raster[max_row][min_col];
+										n_obs++;
+										counts.at(2) = 1;
+									}
+								}
+								if (updated_raster[min_row][col]  != NoDataValue) {
+									if (counts.at(3) == 0) {
+										total_elev += updated_raster[min_row][col];
+										n_obs++;
+										counts.at(3) = 1;
+									}
+								}  
+								if (updated_raster[min_row][max_col]  != NoDataValue) {
+									if (counts.at(4) == 0) {
+										total_elev += updated_raster[min_row][max_col];
+										n_obs++;
+										counts.at(4) = 1;
+									}
+								}  
+								if (updated_raster[row][max_col]  != NoDataValue) {
+									if (counts.at(5) == 0) {
+										total_elev += updated_raster[row][max_col];
+										n_obs++;
+										counts.at(5) = 1;
+									}
+								}
+								if (updated_raster[max_row][max_col]  != NoDataValue) {
+									if (counts.at(6) == 0) {
+										total_elev += updated_raster[max_row][max_col];
+										n_obs++;
+										counts.at(6) = 1;
+									}
+								}
+								if (updated_raster[max_row][col] != NoDataValue) {
+									if (counts.at(7) == 0) {
+										total_elev += updated_raster[max_row][col];
+										n_obs++;
+										counts.at(7) = 1;
+									}
+								}
+								// if 1s surround the pixel, then fill in the pixel
+								if (counts.at(0) > 0 && counts.at(1) > 0 && counts.at(2) > 0 && counts.at(3) > 0 && counts.at(4) > 0 && counts.at(5) > 0 && counts.at(6) > 0 && counts.at(7) > 0) 
+								{
+									this_sweep_data[row][col] = total_elev/float(n_obs);
+									i = window_width+1;
+								}
+							}						
+						}						 
+					}
+	 		 	}
+        break;
+      }
+      case(3):
+      {
+        // sweep 3
+        for (int col=0; col<NCols; ++col)
+        {
+          for(int row=NRows-1; row>0; --row)
+          {
+            // if the node contains nodata, search the surrounding nodes
+           // if the node contains nodata, search the surrounding nodes
+            if(updated_raster[row][col] == NoDataValue)
+            {
+              total_elev = 0;
+              n_obs = 0;
+							vector<int> counts(8,0);
+							
+							for (int i = 1; i < window_width; i++) 
+							{							
+								//set exceptions for first or last row
+								int min_row = row-i;
+								int max_row = row+i;
+								if (min_row < 0) min_row = 0;
+								if (max_row >= NRows) max_row = NRows-1;
+
+								//set exceptions for first or last col
+								int min_col = col-i;
+								int max_col = col+i;
+								if (min_col < 0) min_col = 0;
+								if (max_col >= NCols) max_col = NCols-1;
+								
+										//check whether surrounding pixels in all directions are equal to 0
+								if (updated_raster[min_row][min_col]  != NoDataValue) {
+									if (counts.at(0) == 0) {
+										total_elev += updated_raster[min_row][min_col];
+										n_obs++;
+										counts.at(0) = 1;
+									}
+								}
+								if (updated_raster[row][min_col]  != NoDataValue) {
+									if (counts.at(1) == 0) {
+										total_elev += updated_raster[row][min_col];
+										n_obs++;
+										counts.at(1) = 1;
+									}
+								}
+								if (updated_raster[max_row][min_col]  != NoDataValue) {
+									if (counts.at(2) == 0) {
+										total_elev += updated_raster[max_row][min_col];
+										n_obs++;
+										counts.at(2) = 1;
+									}
+								}
+								if (updated_raster[min_row][col]  != NoDataValue) {
+									if (counts.at(3) == 0) {
+										total_elev += updated_raster[min_row][col];
+										n_obs++;
+										counts.at(3) = 1;
+									}
+								}  
+								if (updated_raster[min_row][max_col]  != NoDataValue) {
+									if (counts.at(4) == 0) {
+										total_elev += updated_raster[min_row][max_col];
+										n_obs++;
+										counts.at(4) = 1;
+									}
+								}  
+								if (updated_raster[row][max_col]  != NoDataValue) {
+									if (counts.at(5) == 0) {
+										total_elev += updated_raster[row][max_col];
+										n_obs++;
+										counts.at(5) = 1;
+									}
+								}
+								if (updated_raster[max_row][max_col]  != NoDataValue) {
+									if (counts.at(6) == 0) {
+										total_elev += updated_raster[max_row][max_col];
+										n_obs++;
+										counts.at(6) = 1;
+									}
+								}
+								if (updated_raster[max_row][col] != NoDataValue) {
+									if (counts.at(7) == 0) {
+										total_elev += updated_raster[max_row][col];
+										n_obs++;
+										counts.at(7) = 1;
+									}
+								}
+								// if 1s surround the pixel, then fill in the pixel
+								if (counts.at(0) > 0 && counts.at(1) > 0 && counts.at(2) > 0 && counts.at(3) > 0 && counts.at(4) > 0 && counts.at(5) > 0 && counts.at(6) > 0 && counts.at(7) > 0) 
+								{
+									this_sweep_data[row][col] = total_elev/float(n_obs);
+									i = window_width+1;
+								}
+							}				
+						}						 
+					}
+	 		 	}
+        break;
+    	}
+		}
+
+		// increment the sweep number
+    nsweep++;
+
+  } while(nsweep < 4);
+
+  LSDRaster Hole_filled_Raster(NRows,NCols,XMinimum,YMinimum,DataResolution,
+                         int(NoDataValue),this_sweep_data,GeoReferencingStrings);
+  return Hole_filled_Raster;
+
+}
+
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Isolate channelised portions of the landscape using the method proposed by Lashermes et
 // al. (2007) Lashermes, B., E. Foufoula-Georgiou, and W. E. Dietrich (2007), Channel
@@ -10809,7 +11544,7 @@ LSDIndexRaster LSDRaster::IsolateChannelsLashermesFull(float sigma, string q_q_f
     }
   }
 
-  LSDIndexRaster channels(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_array);
+  LSDIndexRaster channels(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_array,GeoReferencingStrings);
   return channels;
 }
 // This version uses curvature and an upstream contributing area threshold
@@ -10846,7 +11581,7 @@ LSDIndexRaster LSDRaster::IsolateChannelsLashermesCurvatureArea(float sigma, flo
     }
   }
 
-  LSDIndexRaster channels(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_array);
+  LSDIndexRaster channels(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_array,GeoReferencingStrings);
   return channels;
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -10895,7 +11630,7 @@ LSDIndexRaster LSDRaster::IsolateChannelsGeonet(float timesteps, float area_thre
     }
   }
 
-  LSDIndexRaster channels(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_array);
+  LSDIndexRaster channels(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_array,GeoReferencingStrings);
   return channels;
 }
 
@@ -10975,7 +11710,7 @@ LSDIndexRaster LSDRaster::IsolateChannelsQuantileQuantile(string q_q_filename)
     }
   }
   cout << "DONE" << endl;
-  LSDIndexRaster ChannelMask(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_raster);
+  LSDIndexRaster ChannelMask(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_raster,GeoReferencingStrings);
   return ChannelMask;
 
 }
@@ -11057,7 +11792,7 @@ LSDIndexRaster LSDRaster::IsolateChannelsQuantileQuantileAdaptive(int half_width
     }
   }
   cout << "DONE" << endl;
-  LSDIndexRaster ChannelMask(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_raster);
+  LSDIndexRaster ChannelMask(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary_raster,GeoReferencingStrings);
   return ChannelMask;
 
 }
@@ -11174,6 +11909,50 @@ void LSDRaster::FlattenToCSV(string FileName_prefix)
         get_lat_and_long_locations(i, j, latitude, longitude, Converter);
 
         WriteData << x_loc << "," << y_loc << "," << RasterData[i][j] << "," << latitude << "," << longitude << endl;
+      }
+    }
+  }
+
+  WriteData.close();
+
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Method to flatten an LSDRaster and place the non NDV values in a csv file.
+// Each value is placed on its own line, so that it can be read more quickly in python etc.
+// It includes only lat long in WGS1984 so it can be read by GIS software
+// SMM 12/11/16
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDRaster::FlattenToWGS84CSV(string FileName_prefix)
+{
+
+  // append csv to the filename
+  string FileName = FileName_prefix+".csv";
+
+  //open a file to write
+  ofstream WriteData;
+  WriteData.open(FileName.c_str());
+
+  WriteData.precision(8);
+  WriteData << "latitude,longitude,value" << endl;
+
+  // the x and y locations
+  double latitude,longitude;
+
+  // this is for latitude and longitude
+  LSDCoordinateConverterLLandUTM Converter;
+
+  //loop over each cell and if there is a value, write it to the file
+  for(int i = 0; i < NRows; ++i)
+  {
+    for(int j = 0; j < NCols; ++j)
+    {
+      if (RasterData[i][j] != NoDataValue)
+      {
+        get_lat_and_long_locations(i, j, latitude, longitude, Converter);
+
+        WriteData << latitude << "," << longitude << "," << RasterData[i][j] << endl;
       }
     }
   }
@@ -11414,7 +12193,7 @@ LSDIndexRaster LSDRaster::CreateHilltopPatches(int minimum_patch_size){
   }
 
   //create the final LSDIndexRaster and return it
-  LSDIndexRaster Patches(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,PatchIDs);
+  LSDIndexRaster Patches(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,PatchIDs,GeoReferencingStrings);
   return Patches;
 }
 
@@ -11439,7 +12218,7 @@ LSDRaster LSDRaster::RemoveBelow(float Value){
       }
     }
 
-  LSDRaster Removed(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,Data);
+  LSDRaster Removed(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,Data,GeoReferencingStrings);
   return Removed;
 
 }
@@ -11482,7 +12261,7 @@ LSDRaster LSDRaster::apply_mask(LSDIndexRaster& mask){
   if(mask.get_data_element(i,j)==1) masked_data[i][j]=NoDataValue;
     }
   }
-  LSDRaster masked_raster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,masked_data);
+  LSDRaster masked_raster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,masked_data,GeoReferencingStrings);
   return masked_raster;
 }
 
@@ -11505,6 +12284,43 @@ LSDIndexRaster LSDRaster::ConvertToBinary(int Value, int ndv){
 
   LSDIndexRaster binmask(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,binary,GeoReferencingStrings);
   return binmask;
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Method to merge data from two LSDRasters WITH SAME EXTENT together.  The data from the
+// raster specified as an argument will be added (will overwrite the original raster if there
+// is a conflict).
+// FJC 30/09/16
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+LSDRaster LSDRaster::MergeRasters(LSDRaster& RasterToAdd)
+{
+	Array2D<float> SecondRasterData = RasterToAdd.get_RasterData();
+	Array2D<float> NewRasterData(NRows,NCols,NoDataValue);
+
+	for (int row = 0; row < NRows; row++)
+	{
+		for (int col = 0; col < NCols; col++)
+		{
+			// no data in first raster, data in second raster
+			if (RasterData[row][col] == NoDataValue && SecondRasterData[row][col] != NoDataValue)
+			{
+				NewRasterData[row][col] = SecondRasterData[row][col];
+			}
+			// data in first raster, no data in second raster
+			else if (RasterData[row][col] != NoDataValue && SecondRasterData[row][col] == NoDataValue)
+			{
+				NewRasterData[row][col] = RasterData[row][col];
+			}
+			// data in both rasters - select data from the second raster
+			else if (RasterData[row][col] != NoDataValue && SecondRasterData[row][col] != NoDataValue)
+			{
+				NewRasterData[row][col] = SecondRasterData[row][col];
+			}
+		}
+	}
+
+	LSDRaster NewRaster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,NewRasterData,GeoReferencingStrings);
+	return NewRaster;
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -11619,36 +12435,36 @@ float LSDRaster::get_threshold_for_floodplain_QQ(string q_q_filename, float thre
 
   for (int i =0; i < n_values; i++)
   {
-    if (normal_variates[i] <= 0)
-    {
+    //if (normal_variates[i] <= 0)
+    //{
       // get difference between real and normal distributions
-      float diff = abs(quantile_values[i] - mn_values[i]);
-      // express as fraction of the range of data
-      float frac_diff = diff/range;
-      if (frac_diff < threshold_condition)
-      {
-        // first time the condition is fulfilled
-        if (flag == 0)
-        {
-          flag = 1;
-          int count = 0;
-          //search next points to check if they also fulfil the condition
-          for (int j = 1; j <= min_length; j++)
-          {
-            float next_diff = abs(quantile_values[i+j] - mn_values[i+j]);
-            float next_frac = next_diff/range;
-            if (next_frac < threshold_condition) count++;
-          }
-          //cout << "Count is: " << count << endl;
-          if (count == min_length)
-          {
-            threshold = quantile_values[i];
-            cout << "Quantile value at threshold: " << quantile_values[i] << " Normal variate: " <<  normal_variates[i] << endl;
-          }
-          else flag = 0;
-        }
+		float diff = abs(quantile_values[i] - mn_values[i]);
+		// express as fraction of the range of data
+		float frac_diff = diff/range;
+		if (frac_diff < threshold_condition)
+		{
+			// first time the condition is fulfilled
+			if (flag == 0)
+			{
+				flag = 1;
+				int count = 0;
+				//search next points to check if they also fulfil the condition
+				for (int j = 1; j <= min_length; j++)
+				{
+					float next_diff = abs(quantile_values[i+j] - mn_values[i+j]);
+					float next_frac = next_diff/range;
+					if (next_frac < threshold_condition) count++;
+				}
+				//cout << "Count is: " << count << endl;
+				if (count == min_length)
+				{
+					threshold = quantile_values[i];
+					cout << "Quantile value at threshold: " << quantile_values[i] << " Normal variate: " <<  normal_variates[i] << endl;
+				}
+				else flag = 0;
+			}
       }
-    }
+   // }
   }
 
   return threshold;
@@ -11659,7 +12475,7 @@ float LSDRaster::get_threshold_for_floodplain_QQ(string q_q_filename, float thre
 // false postivies. Need to pass in a raster of predicted values and a raster of actual values
 // Predicted values: 1 = floodplain, NoDataValue = not floodplain
 // Actual values: 1 = floodplain, 0 = not floodplain
-// results are in a vector: 
+// results are in a vector:
 // 0 - reliability
 // 1 - sensitvity
 // 2 - false positive rate
@@ -11711,7 +12527,7 @@ vector<float> LSDRaster::AnalysisOfQuality(LSDRaster& ActualRaster)
   //now calculate the quality analyses
   //reliability
   quality_results[0] = SumTP/(SumTP + SumFP);
-	//sensitivity
+	//sensitivity r_tp
 	quality_results[1] = SumTP/(SumTP + SumFN);
 	// r_fp
 	quality_results[2] = SumFP/(SumFP + SumTN);
@@ -11719,7 +12535,7 @@ vector<float> LSDRaster::AnalysisOfQuality(LSDRaster& ActualRaster)
 	quality_results[3] = SumTN/(SumFP + SumTN);
 	// r_fn
 	quality_results[4] = 1 - quality_results[1];
-		
+
   return quality_results;
 }
 
@@ -11837,6 +12653,72 @@ LSDRaster LSDRaster::PoupulateRasterSingleValue(float value){
 
 }
 
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Write CHT and hilltop gradient data to a *.csv file, coded by UTM coordinates as well
+// as lat/long.
+// SWDG 2/11/16
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDRaster::HilltopsToCSV(LSDRaster& CHT, LSDRaster& CHT_gradient, LSDRaster& gradient, int UTMZone, bool isNorth, int eId, string filename){
+
+  vector<float> CHT_1D = Flatten(CHT.get_RasterData());
+  vector<float> sorted;
+  vector<size_t> index_map;
+  vector<string> Data;
+
+  //sort the 1D elevation vector and produce an index
+  matlab_float_sort_descending(CHT_1D, sorted, index_map);
+
+  int q = 0;
+
+  //Tests if the sorted vector has NDV at the front or back. We need them at the end.
+  //This can fail if you have  strange NDV value that is not a low or high number.
+  if (sorted[q] == NoDataValue){
+    matlab_float_sort(CHT_1D, sorted, index_map);
+  }
+
+  while (sorted[q] != NoDataValue){
+
+    int gradient_flag = 1; //0 == above threshold, 1 == below threshold
+    double Lat;
+    double Long;
+
+    //use row major ordering to reconstruct each cell's i,j coordinates
+    int i = index_map[q] / NCols;
+    int j = index_map[q] % NCols;
+
+    //reconstruct UTM
+    double UTMe = XMinimum + float(j)*DataResolution + 0.5*DataResolution;
+    double UTMn = YMinimum + float(NRows-i)*DataResolution - 0.5*DataResolution;
+
+    //reconstruct lat long
+    LSDCoordinateConverterLLandUTM Converter;
+    Converter.UTMtoLL(eId, UTMn, UTMe, UTMZone, isNorth, Lat, Long);
+
+    if (CHT_gradient.get_data_element(i, j) == NoDataValue){
+      gradient_flag = 0;
+    }
+
+    //Build a csv string containing the results
+    stringstream ss;
+    ss << setiosflags(ios::fixed) << setprecision(7) << q << "," << UTMe << "," << UTMn << "," << Lat << "," << Long << "," << CHT.get_data_element(i, j) << "," << gradient_flag << "," << gradient.get_data_element(i, j);
+
+    Data.push_back(ss.str());
+    ++q;
+
+  }
+
+  ofstream WriteData;
+  WriteData.open(filename.c_str());
+
+  WriteData << "_ID,Easting,Northing,Lat,Long,CHT,gradient_flag,gradient" << endl;
+
+  for (int w = 0; w < int(Data.size());++w){
+    WriteData << Data[w] << endl;
+  }
+
+  WriteData.close();
+
+}
 
 
 #endif

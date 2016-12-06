@@ -60,6 +60,12 @@ using namespace TNT;
 #ifndef StatsTools_H
 #define StatsTools_H
 
+// tools for getting keys from a map
+vector<string> extract_keys(map<string, int> input_map);
+vector<string> extract_keys(map<string, float> input_map);
+vector<string> extract_keys(map<string, bool> input_map);
+vector<string> extract_keys(map<string, string> input_map);
+
 // tools for reversing arrays
 Array2D<double> reverse_array_rows(Array2D<double>& data);
 Array2D<double> reverse_array_cols(Array2D<double>& data);
@@ -511,6 +517,11 @@ void rank_vector_with_groups(vector<float> sorted_data,
 // SWDG 16/07/14
 string ReadTextFile(ifstream& File);
 
+// This reads a csv file and takes the headers out. 
+// These headers can't have spaces since the spaces are removed. 
+// SMM 18/11/2016
+vector<string> ReadCSVHeader(string path, string fname);
+
 /// Splits a string delimited by a character, c, into a sequence of strings, here
 /// stored in a vector, v.
 /// @author DAV, but taken out of C++ Cookbook (Stevens, Digins, Turkanis, and Coswell. O'Reilly)
@@ -598,7 +609,7 @@ public:
 };
 
 
-
+struct tm Parse_time_string(string time_string);
 
 
 #endif

@@ -84,6 +84,7 @@ contains a number of analysis tools built around drainage networks.
 #include "LSDIndexChannel.hpp"
 #include "LSDChannel.hpp"
 #include "LSDStatsTools.hpp"
+#include "LSDShapeTools.hpp"
 using namespace std;
 using namespace TNT;
 
@@ -107,6 +108,51 @@ class LSDJunctionNetwork
 
   /// @brief Assignment operator.
   LSDJunctionNetwork& operator=(const LSDJunctionNetwork& LSDR);
+
+  /// @brief this function gets the UTM_zone and a boolean that is true if
+  /// the map is in the northern hemisphere
+  /// @param UTM_zone the UTM zone. Replaced in function.
+  /// @param is_North a boolean that is true if the DEM is in the northern hemisphere.
+  ///  replaced in function
+  /// @author SMM
+  /// @date 22/12/2014
+  void get_UTM_information(int& UTM_zone, bool& is_North);
+
+  /// @brief this gets the x and y location of a node at row and column
+  /// @param row the row of the node
+  /// @param col the column of the node
+  /// @param x_loc the x location (Northing) of the node
+  /// @param y_loc the y location (Easting) of the node
+  /// @author SMM
+  /// @date 22/12/2014
+  void get_x_and_y_locations(int row, int col, double& x_loc, double& y_loc);
+
+  /// @brief this gets the x and y location of a node at row and column
+  /// @param row the row of the node
+  /// @param col the column of the node
+  /// @param x_loc the x location (Northing) of the node
+  /// @param y_loc the y location (Easting) of the node
+  /// @author SMM
+  /// @date 22/12/2014
+  void get_x_and_y_locations(int row, int col, float& x_loc, float& y_loc);
+
+
+  /// @brief a function to get the lat and long of a node in the raster
+  /// @detail Assumes WGS84 ellipsiod
+  /// @param row the row of the node
+  /// @param col the col of the node
+  /// @param lat the latitude of the node (in decimal degrees, replaced by function)
+  ///  Note: this is a double, because a float does not have sufficient precision
+  ///  relative to a UTM location (which is in metres)
+  /// @param long the longitude of the node (in decimal degrees, replaced by function)
+  ///  Note: this is a double, because a float does not have sufficient precision
+  ///  relative to a UTM location (which is in metres)
+  /// @param Converter a converter object (from LSDShapeTools)
+  /// @author SMM
+  /// @date 22/12/2014
+  void get_lat_and_long_locations(int row, int col, double& lat,
+                  double& longitude, LSDCoordinateConverterLLandUTM Converter);
+
 
   ///@brief Recursive add_to_stack routine to build the junction tree, from Braun and Willett (2012)
   ///equations 12 and 13.
@@ -205,6 +251,27 @@ class LSDJunctionNetwork
   /// @author SMM
   /// @date 01/09/12
   LSDIndexRaster StreamOrderArray_to_LSDIndexRaster();
+
+  /// @brief Method to flatten an te stream order array and place the non NDV values in a csv file.
+  /// @detail Each value is placed on its own line, so that it can be read more quickly in python etc.
+  ///   It includes the lat long coordinates in CSV, in WGS84 coordinate system EPSG:4326
+  /// @param FileName_prefix The prefix of the file to write, if no path is included it will write to the current directory.
+  ///  The csv extension is added automatically.
+  /// @author SMM
+  /// @date 12/11/16
+  void StreamOrderArray_to_WGS84CSV(string FileName);
+
+
+  /// @brief This prints a stream network to a csv in WGS84
+  /// @detail This function prints a network that is ordered by sources, channels
+  ///  have stream orders and junction numbers attached
+  /// param FlowInfo the flow info object which translates node indices to actual points
+  /// @param FileName_prefix The prefix of the file to write, if no path is included it will write to the current directory.
+  ///  The csv extension is added automatically.
+  /// @author SMM
+  /// @date 14/11/16
+  void PrintChannelNetworkToCSV(LSDFlowInfo& flowinfo, string fname_prefix);
+  
   
   /// @brief This sends the JunctionArray to a LSDIndexRaster.
   /// @return LSDIndexRaster of JunctionArray.
@@ -871,6 +938,14 @@ vector<int> GetChannelHeadsChiMethodFromValleys(vector<int> ValleyNodes,
   /// @date 04/04/13
   LSDIndexRaster ChannelIndexer(LSDFlowInfo& flowinfo);
 
+  /// @brief This extracts vectors containing node incidex, junction indices
+  ///  and stream orders of pixels in the channel network. 
+  /// @detail The vectors are replaced by the method
+  /// @author SMM
+  /// @date 14/11/2016
+  void GetChannelNodesAndJunctions(LSDFlowInfo& flowinfo, vector<int>& NIvec, vector<int>& JIvec, vector<int>& SOvec);
+
+
   /// SplitChannel
   /// @brief This function splits the channel into a series of segments, providing a
   /// convenient unit with which to analyse landscapes.  The user provides the
@@ -982,6 +1057,34 @@ vector<int> GetChannelHeadsChiMethodFromValleys(vector<int> ValleyNodes,
   int get_nodeindex_of_nearest_channel_for_specified_coordinates(float X_coordinate,
                             float Y_coordinate, int threshold_stream_order, int search_radius_nodes, 
                             LSDFlowInfo& FlowInfo);
+	
+	
+	/// @brief Function to get info about the nearest channel node of a given node.
+  /// @param StartingNode index of node of interest
+  /// @param threshold_SO threshold stream order for finding the nearest channel
+  /// @param FlowInfo LSDFlowInfo object
+	/// @param DistFromOutlet LSDRaster of flow lengths
+	/// @param ChannelNode int to store the NI of the nearest channel
+	/// @param FlowLength float to store the flow length to the nearest channel
+	/// @param DistanceUpstream float to store the distance upstream of the nearest channel
+  /// @author FJC
+  /// @date 29/09/16
+	void get_info_nearest_channel_to_node(int& StartingNode, int& threshold_SO, LSDFlowInfo& FlowInfo, LSDRaster& DistFromOutlet, int& ChannelNode, float& FlowLength, float& DistanceUpstream);
+	
+	/// @brief Function to get info about the nearest channel node on the main stem of a given node.
+  /// @param StartingNode index of node of interest
+  /// @param FlowInfo LSDFlowInfo object
+	/// @param ElevationRaster LSDRaster of elevations
+	/// @param DistFromOutlet LSDRaster of flow lengths
+	/// @param ChannelNode int to store the NI of the nearest channel
+	/// @param FlowLength float to store the flow length to the nearest channel
+	/// @param DistanceUpstream float to store the distance upstream of the nearest channel
+	/// @param Relief float to store relief compared to nearest channel
+  /// @author FJC
+  /// @date 05/10/16
+	
+void get_info_nearest_channel_to_node_main_stem(int& StartingNode, LSDFlowInfo& FlowInfo, LSDRaster& ElevationRaster, LSDRaster& DistFromOutlet, LSDIndexChannel& MainStem, int& ChannelNode, float& FlowLength, float& DistanceUpstream, float& Relief);
+	
 
   /// @brief This function takes a node index, checks to see if it is on a channel,
   /// and then works its way up the channel to find the upstream junction
@@ -1092,6 +1195,14 @@ vector<int> GetChannelHeadsChiMethodFromValleys(vector<int> ValleyNodes,
   /// @author FJC
   /// @date 08/10/15
   int get_downstream_junction(int starting_junction, LSDFlowInfo& FlowInfo);
+	
+  /// @details Gets the stream order of a node
+  /// @param FlowInfo LSDFlowInfo object
+  /// @param node node of interest
+  /// @return integer with stream order of junction
+  /// @author FJC
+  /// @date 29/09/16
+	int get_StreamOrder_of_Node(LSDFlowInfo& FlowInfo, int node);
   
   /// @details Gets the stream order of a junction
   /// @param FlowInfo LSDFlowInfo object
@@ -1135,18 +1246,12 @@ vector<int> GetChannelHeadsChiMethodFromValleys(vector<int> ValleyNodes,
   
   /// @return The vector of sources. The vector is composed of node indices
   vector<int> get_SourcesVector() const { return SourcesVector; }
+	
+	/// @return the stream order array
+	Array2D<int> get_StreamOrderArray() const { return StreamOrderArray; }
   
   void couple_hillslope_nodes_to_channel_nodes(LSDRaster& Elevation, LSDFlowInfo& FlowInfo, LSDRaster& D_inf_Flowdir, LSDIndexRaster& ChannelNodeNetwork, int OutletJunction, vector<int>& hillslope_nodes, vector<int>& baselevel_channel_nodes);
-  
-  /// @details This function removes patches of floodplain that are not connected to the channel network.
-  /// It must be passed an LSDIndexRaster with the floodplain patches labelled with a specific ID
-  /// number (done using Dave's connected components algorithm)
-  /// @param FloodplainPatches LSDIndexRaster with patches labelled with ID number
-  /// @return LSDIndexRaster with binary mask of floodplain patches
-  /// @author FJC
-  /// @date 22/10/15
-  LSDIndexRaster remove_hillslope_patches_from_floodplain_mask(LSDIndexRaster& FloodplainPatches, float threshold_SO);
-  
+  	
   /// @details This function calculates the relief of each pixel compared to the nearest downstream
   /// channel pixel equal or greater to the threshold stream order
   /// @param ElevationRaster LSDRaster with elevations
@@ -1157,7 +1262,43 @@ vector<int> GetChannelHeadsChiMethodFromValleys(vector<int> ValleyNodes,
   /// @date 17/11/15
   LSDRaster calculate_relief_from_channel(LSDRaster& ElevationRaster, LSDFlowInfo& FlowInfo, int threshold_SO);
 	
-	/// @details This function returns the node index of the nearest FIP to a
+	/// @details This function calculates the relief of each pixel compared to the nearest 
+	/// downstream channel pixel equal or greater to the threshold stream order for that
+	/// connected components patch
+  /// @param ElevationRaster LSDRaster with elevations
+	/// @param ConnectedComponents connected components raster
+	/// @param DistFromOutlet raster of flow lengths
+  /// @param FlowInfo LSDFlowInfo object
+  /// @param threshold_SO original threshold stream order to calculate relief from
+  /// @return LSDRaster with channel relief
+  /// @author FJC
+  /// @date 29/09/16
+	LSDRaster calculate_relief_from_channel_connected_components(LSDRaster& ElevationRaster, LSDIndexRaster& ConnectedComponents, LSDRaster& DistFromOutlet, LSDFlowInfo& FlowInfo, int threshold_SO, int search_distance);
+		
+	/// @details This function takes in a raster of connected component patches. It finds
+	/// the elevation of the nearest channel for the patch.
+  /// @param ConnectedComponents connected components raster
+	/// @param ElevationRaster LSDRaster of elevations
+  /// @param FlowInfo LSDFlowInfo object
+	/// @param DistFromOutlet LSDRaster of flow lengths
+  /// @param threshold_SO threshold stream order to calculate relief from
+	/// @param search_distance length of channel reach to get elevation from
+  /// @return 2D array with the elevation of nearest channel for each patch
+  /// @author FJC
+  /// @date 29/09/16
+	Array2D<int> Get_Elevation_of_Nearest_Channel_for_Connected_Components(LSDIndexRaster& ConnectedComponents, LSDRaster& ElevationRaster, LSDRaster& DistFromOutlet, LSDFlowInfo& FlowInfo, int threshold_SO, int search_distance);
+	
+	/// @details This function finds the mean elevation of the channel reach given a node on the channel network
+  /// @param StartingNode node to check
+  /// @param search_distance reach distance - will check both upstream and downstream this distance
+  /// @param ElevationRaster elevation raster
+	/// @param FlowInfo LSDFlowInfo object
+  /// @return mean elevation of reach
+  /// @author FJC
+  /// @date 29/09/16	
+	float find_mean_elevation_of_channel_reach(int StartingNode, int search_distance, LSDRaster& ElevationRaster, LSDFlowInfo& FlowInfo);
+	
+		/// @details This function returns the node index of the nearest FIP to a
 	/// specified node.
   /// @param point_node Node to start with
   /// @param search_distance Distance to search upstream and downstream for a FIP
