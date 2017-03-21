@@ -45,6 +45,10 @@
 #include "../LSDRaster.hpp"
 #include "../LSDRasterInfo.hpp"
 #include "../LSDStatsTools.hpp"
+#include "../LSDFlowInfo.hpp"
+#include "../LSDBasin.hpp"
+#include "../LSDJunctionNetwork.hpp"
+#include "../LSDShapeTools.hpp"
 using namespace std;
 
 int main (int nNumberofArgs,char *argv[])
@@ -94,10 +98,21 @@ int main (int nNumberofArgs,char *argv[])
   float_default_map["minimum_elevation"] = 0.0;
   float_default_map["maximum_elevation"] = 30000;
   float_default_map["filling_window_radius"] = 50;
-  
+  float_default_map["relief_radius"] = 100;
+  float_default_map["relief_threshold"] = 50;
+
+  string_default_map["filling_raster_fname"] = "NULL";
+
   // set default methods
   bool_default_map["fill_nodata"] = false;
+  bool_default_map["remove_low_relief"] = false;
+  bool_default_map["write_relief_raster"] = false;
+  bool_default_map["find_holes"] = false;
+  bool_default_map["fill_holes_with_coarse_raster"] = false;
   
+  int_default_map["hole_filling_steps"] = 500;
+  int_default_map["hole_filling_sweeps"] = 50;
+
   // Use the parameter parser to get the maps of the parameters required for the 
   // analysis
   LSDPP.parse_all_parameters(float_default_map, int_default_map, bool_default_map,string_default_map);
@@ -143,9 +158,87 @@ int main (int nNumberofArgs,char *argv[])
     FinalRaster = FilledDEM;
   }
   
-  // Now print the new file
-  string preprocess_str = "_PP";
-  FinalRaster.write_raster(DATA_DIR+DEM_ID+preprocess_str,raster_ext);
+  // This will remove low relief areas and replace with NoData
+  if(this_bool_map["remove_low_relief"])
+  {
+    float relief_radius = this_float_map["relief_radius"];
+    float relief_threshold = this_float_map["relief_threshold"];
+    
+    cout << "Let me calculate the relief for you. Radius: " << relief_radius << " thresh: " <<  relief_threshold << endl;
+    
+    int relief_method = 0;    // THis means a square kernal is used. 
+                              // A curcyular kernal is more computationally intensive
+                              // and this is a rudimentary calculation so doesn't need
+                              // fancy circular windows. 
+    LSDRaster Relief =  FinalRaster.calculate_relief(relief_radius, relief_method);
+    
+    // Now change to nodata
+    bool belowthresholdisnodata = true;
+    LSDRaster Thresholded = FinalRaster.mask_to_nodata_using_threshold_using_other_raster(relief_threshold,belowthresholdisnodata, Relief);
+    FinalRaster = Thresholded; 
+
+    if(this_bool_map["fill_nodata"])
+    {
+      cout << "I am going to fill internal nodata once more, because you have removed flat areas." << endl;
+      LSDRaster FilledDEM = FinalRaster.alternating_direction_nodata_fill_irregular_raster(window_radius);
+      FinalRaster = FilledDEM;
+    }      
+      
+    if(this_bool_map["write_relief_raster"])
+    {
+      string relief_str = "_REL";
+      Relief.write_raster(OUT_DIR+OUT_ID+relief_str,raster_ext);
+    }
+  }
   
+  //cout << "Find holes is: " << this_bool_map["find_holes"] << endl;
+  if(this_bool_map["find_holes"])
+  {
+    cout << "I am finding some holes for you. " << endl;
+    LSDIndexRaster LookForHoles = FinalRaster.create_binary_isdata_raster();
+    
+    string LFH_str = "_LFH";
+    LookForHoles.write_raster(OUT_DIR+OUT_ID+LFH_str,raster_ext);
+  
+    LSDIndexRaster Holer = LookForHoles.find_holes_with_nodata_bots(this_int_map["hole_filling_steps"], this_int_map["hole_filling_sweeps"]);
+    
+    string Holer_str = "_HOLES";
+    Holer.write_raster(OUT_DIR+OUT_ID+Holer_str,raster_ext);
+  
+  }
+  
+  
+  if(this_bool_map["fill_holes_with_coarse_raster"])
+  {
+    cout << "Getting the locations of the holes. " << endl;
+    LSDIndexRaster LookForHoles = FinalRaster.create_binary_isdata_raster();
+    
+    vector<float> UTME;
+    vector<float> UTMN;
+    vector<int> rows_of_nodes;
+    vector<int> cols_of_nodes;
+    LookForHoles.get_points_in_holes_for_interpolation(this_int_map["hole_filling_steps"], 
+                                  this_int_map["hole_filling_sweeps"],
+                                  UTME,UTMN,rows_of_nodes,cols_of_nodes);
+    
+    cout << "Number of hole points is: " << UTME.size() << endl;
+    
+    
+    string filling_raster_fname = DATA_DIR+this_string_map["filling_raster_fname"];
+    cout << "I am getting the filling raster for interpolation. " << endl;
+    LSDRaster filling_raster(filling_raster_fname,raster_ext);
+    
+    vector<float> filled_data = filling_raster.interpolate_points_bilinear(UTME, UTMN);
+    
+    LSDRaster HolesFilled = FinalRaster.fill_with_interpolated_data(rows_of_nodes,cols_of_nodes, filled_data);
+    
+    string HF_str = "_HF";
+    HolesFilled.write_raster(OUT_DIR+OUT_ID+HF_str,raster_ext);
+  }
+  
+
+  // Now write the final raster
+  string preprocess_str = "_PP";
+  FinalRaster.write_raster(OUT_DIR+OUT_ID+preprocess_str,raster_ext);
   
 }

@@ -79,11 +79,14 @@ Array2D<int> reverse_array_cols(Array2D<int>& data);
 // the Durbin-Watson test statistic which looks for autocorrelation of the residuals
 vector<float> simple_linear_regression(vector<float>& x_data, vector<float>& y_data, vector<float>& residuals);
 float get_mean(vector<float>& y_data);
+float get_mean_ignore_ndv(vector<float>& y_data, float ndv);
 float get_mean_ignore_ndv(Array2D<float>& data, float ndv);
 float get_SST(vector<float>& y_data, float mean);
 float get_variance_ignore_ndv(Array2D<float>& data, float ndv, float mean);
 float get_range_ignore_ndv(Array2D<float>& data, float ndv);
 float get_range_from_vector(vector<float>& y_data, float ndv);
+float Get_Minimum(vector<float>& y_data, float ndv);
+float Get_Maximum(vector<float>& y_data, float ndv);
 float get_durbin_watson_statistic(vector<float> residuals);
 float get_standard_deviation(vector<float>& y_data, float mean);
 float get_standard_error(vector<float>& y_data, float standard_deviation);
@@ -517,8 +520,8 @@ void rank_vector_with_groups(vector<float> sorted_data,
 // SWDG 16/07/14
 string ReadTextFile(ifstream& File);
 
-// This reads a csv file and takes the headers out. 
-// These headers can't have spaces since the spaces are removed. 
+// This reads a csv file and takes the headers out.
+// These headers can't have spaces since the spaces are removed.
 // SMM 18/11/2016
 vector<string> ReadCSVHeader(string path, string fname);
 
@@ -611,5 +614,25 @@ public:
 
 struct tm Parse_time_string(string time_string);
 
+//Returns the distance between 2 pairs of raster indexes
+//SWDG 19/1/17
+float distbetween(int row1, int col1, int row2, int col2);
+
+// Normalize the values of an array of floats to between 0 and MaxValue.
+// pass in percentiles eg 98 for the 98th percentile to truncate the data
+// about the median. For no truncation pass in 0 and 100.
+// SWDG 25/1/17
+Array2D<float> normalize_terrain_index(Array2D<float> Data, float lower_percentile, float upper_percentile, float MaxValue, float NoDataValue);
+
+// Implementation of the Jordan Curve theorem to test if a given point is inside
+// a polygon.
+// returns an integer counting the number of times a ray traced from the point (XCoord,YCoord)
+// crosses the border of the polygon.
+// An even return value (0 is even) means the point is outside the polygon, and an odd
+// value means the point is inside the polygon.
+//
+// Adapted from: http://stackoverflow.com/a/2922778/1627162
+//SWDG - 25/1/17
+int PointInPolygon(int VertexCount, float XCoords[], float YCoords[], float XCoord, float YCoord);
 
 #endif

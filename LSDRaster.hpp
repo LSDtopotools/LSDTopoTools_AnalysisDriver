@@ -413,6 +413,39 @@ class LSDRaster
   void get_lat_and_long_locations(int row, int col, double& lat,
                   double& longitude, LSDCoordinateConverterLLandUTM Converter);
 
+  /// @brief This returns vectors of all the easting and northing points in the raster
+  ///  Used for interpolations
+  /// @param Eastings a vector of easting coordinates. Will be replaced by method.
+  /// @param Northings a vector of northing coordinates. Will be replaced by method.
+  /// @author SMM
+  /// @date 17/03/2017
+  void get_easting_and_northing_vectors(vector<float>& Eastings, vector<float>& Northings);
+
+  /// @brief This interpolates a vector of points onto the raster. Uses bilinear interpolation.
+  /// @param UTMEvec Easting coordinates of points to be interpolatiod.
+  /// @param UTMNvec Northing coordinates of points to be interpolatiod.
+  /// @return The vector of interpolated data.
+  /// @author SMM
+  /// @date 17/03/2017
+  vector<float> interpolate_points_bilinear(vector<float> UTMEvec, vector<float> UTMNvec);
+
+  /// @brief This fills a raster with precalculated interpolated data
+  /// @param rows_of_nodes the rows of the interpolated points
+  /// @param cols_of_nodes the colss of the interpolated points
+  /// @param interpolated data the actual data that has been interpolated
+  /// @author SMM
+  /// @date 17/02/2017
+  LSDRaster fill_with_interpolated_data(vector<int> rows_of_nodes, vector<int> cols_of_nodes, 
+                                        vector<float> interpolated_data);
+
+  /// @brief This gets the value at a point in UTM coordinates
+  /// @param UTME the easting coordinate
+  /// @param UTMN the northing coordinate
+  /// @return The value at that point
+  /// @author SMM
+  /// @date 14/03/2017
+  float get_value_of_point(float UTME, float UTMN);
+
   /// @brief this check to see if a point is within the raster
   /// @param X_coordinate the x location of the point
   /// @param Y_coordinate the y location of the point
@@ -447,6 +480,12 @@ class LSDRaster
   ///@author FJC
   ///@date 06/11/15
   vector<float> get_RasterData_vector();
+
+  ///@brief This function returns the raster data as a vector, ignoring NDVs
+  ///@return vector<float> with raster data
+  ///@author MDH
+  ///@date 06/02/17
+  vector<float> get_RasterData_vector_No_NDVs();
 
 	///@brief This function returns the raster data as text file
   ///@return text file with raster data
@@ -529,6 +568,12 @@ class LSDRaster
   /// @author DAV
   /// @date 01/04/2016
   void strip_raster_padding();
+
+  /// @brief Buffers a raster using a circular kernel of a user-defined radius (m)
+  /// @param window_radius radius in metres
+  /// @author FJC
+  /// @date 10/02/17
+  LSDRaster BufferRasterData(float window_radius);
 
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -1225,6 +1270,18 @@ class LSDRaster
   /// @author SMM
   /// @date 28/9/2016
   LSDRaster mask_to_nodata_using_threshold(float threshold,bool belowthresholdisnodata);
+
+
+  /// @brief This function changes any data point either above or below threshold to NoDataValue
+  ///  The threshold is determined by a second raster
+  /// @param threshold The threshold value
+  /// @param belowthresholdisnodata a boolean that if true means anything below the
+  ///   threshold turns to nodata
+  /// @param MaskingRaster an LSDRaster that is used to define the mask
+  /// @return Returns the masked raster
+  /// @author SMM
+  /// @date 28/9/2016
+  LSDRaster mask_to_nodata_using_threshold_using_other_raster(float threshold,bool belowthresholdisnodata, LSDRaster& MaskingRaster);
 
   /// @brief This function creats an LSDIndexRaster mask (with true == 1 and otherwise nodata)
   /// from an LSDRaster. Can mask either above or below a threshold
@@ -1969,6 +2026,12 @@ class LSDRaster
   /// @date 09/12/2014
   LSDRaster alternating_direction_nodata_fill(int window_width);
 
+  /// @brief This returns an index raster with 1 for data and 0 for nodata
+  /// @return index raster 1 == data, 0 == nodata
+  /// @author SMM
+  /// @date 17/03/2017
+  LSDIndexRaster create_binary_isdata_raster();
+
   /// @brief A routine that fills nodata holes. It first prepares the data
   ///  with the sprial trimmer so nodata around the edges is removed.
   /// @detail The routine sweeps the raster looking for nodata and filling
@@ -1982,12 +2045,12 @@ class LSDRaster
   /// @author SMM
   /// @date 09/12/2014
   LSDRaster alternating_direction_nodata_fill_with_trimmer(int window_width);
-	
-	/// @brief Function to fill in no data holes in an irregular raster. Pixel must have 
-	/// all neighbours not equal to no data value within the specified window radius.  Data is 
+
+	/// @brief Function to fill in no data holes in an irregular raster. Pixel must have
+	/// all neighbours not equal to no data value within the specified window radius.  Data is
 	/// filled based on mean of pixels within the window radius.
 	LSDRaster nodata_fill_irregular_raster(int window_radius);
-	
+
 	/// @brief A routine that fills nodata holes. Modified by FJC to only fill holes
 	/// surrounded in all directions by pixels with valid elevation values
   /// @detail The routine sweeps the raster looking for nodata and filling
@@ -2151,12 +2214,6 @@ class LSDRaster
   /// @date 16/11/15
   float get_threshold_for_floodplain_QQ(string q_q_filename, float threshold_condition, int lower_percentile, int upper_percentile);
 
-  /// @brief Function to calculate the reliability of floodplain method
-  /// @param ActualRaster raster of actual values
-  /// @author FJC
-  /// @date 26/06/16
-  vector<float> AnalysisOfQuality(LSDRaster& ActualRaster);
-
   /// @brief Get the lengths in spatial units of each part of the channel network, divided by strahler order.
   /// @param StreamNetwork Raster of the stream network coded by strahler order.
   /// @param FlowDir Array of flowdirections from FlowInfo (Not D-inf).
@@ -2197,6 +2254,21 @@ class LSDRaster
   /// @author SWDG
   /// @date 2/11/16
   void HilltopsToCSV(LSDRaster& CHT, LSDRaster& CHT_gradient, LSDRaster& gradient, int UTMZone, bool isNorth, int eId, string filename);
+
+  /// @brief Sample the values of 3 input rasters that intersect with the point a,b within
+  /// the area defined by threshold.
+  ///
+  /// @param Raster1 First LSDRaster to sample.
+  /// @param Raster2 Second LSDRaster to sample.
+  /// @param Raster3 Third LSDRaster to sample.
+  /// @param a Integer row index of point to sample.
+  /// @param b Integer col index of point to sample.
+
+  /// @param threshold The number of cells of hilltop to sample.
+  /// @return A vector of vectors of floats, containing the sampled values for each raster.
+  /// @author SWDG
+  /// @date 23/1/17
+  vector< vector<float> > Sample_Along_Ridge(LSDRaster& Raster1, LSDRaster& Raster2, LSDRaster& Raster3, int a, int b, int threshold);
 
 protected:
 
