@@ -1,0 +1,16 @@
+dist: trusty
+sudo: required
+language:
+  - cpp
+compiler:
+  - gcc
+before_install:
+  - sudo apt-get install -y libfftw3-dev
+  - cd Analysis_driver
+script:
+  # Run your build commands next
+  - make -f DEM_preprocessing.make
+  - make -f Drive_analysis_from_paramfile.make
+  - make -f LSDTT_BasicMetrics.make  
+  
+  
