@@ -177,7 +177,7 @@ void LSDSpatialCSVReader::create(int nrows, int ncols, float xmin, float ymin,
 
   //cout << "Now for the georeferencing strings" << endl;
   GeoReferencingStrings = temp_GRS;
-  
+
   latitude = this_latitude;
   longitude = this_longitude;
   is_point_in_raster = this_is_point_in_raster;
@@ -314,7 +314,19 @@ void LSDSpatialCSVReader::load_csv_data(string filename)
         }
         else if (i == longitude_index)
         {
-          temp_longitude.push_back( atof(this_string_vec[i].c_str() ) );
+          float this_longitude = atof(this_string_vec[i].c_str() );
+          
+          /*
+          if (this_longitude < -180)
+          {
+            this_longitude = 360+this_longitude;
+          }
+          if (this_longitude > 180)
+          {
+            this_longitude = this_longitude-360;
+          }
+          */
+          temp_longitude.push_back( this_longitude );
 
         }
         else
@@ -366,17 +378,17 @@ bool LSDSpatialCSVReader::check_if_latitude_and_longitude_exist()
 bool LSDSpatialCSVReader::check_if_all_data_columns_same_length()
 {
 
-  bool all_data_columns_same_legth = true; 
+  bool all_data_columns_same_legth = true;
   int n_lat;
-  
+
   n_lat = int(latitude.size());
   for( map<string, vector<string> >::iterator it = data_map.begin(); it != data_map.end(); ++it)
   {
-    int n_this_column; 
+    int n_this_column;
     n_this_column = int((it->second).size());
-    
+
     cout << "The size of this data column is: " <<n_this_column << "\n";
-    
+
     // if the columns being teh same length is still true, check if the next
     // column is the same length
     if(all_data_columns_same_legth)
@@ -385,10 +397,10 @@ bool LSDSpatialCSVReader::check_if_all_data_columns_same_length()
       {
         all_data_columns_same_legth = false;
       }
-    
+
     }
   }
-  
+
   return all_data_columns_same_legth;
 
 }
@@ -524,7 +536,7 @@ void LSDSpatialCSVReader::get_UTM_information(int& UTM_zone, bool& is_North)
   if (iter != GeoReferencingStrings.end() )
   {
     string info_str = GeoReferencingStrings[mi_key];
-    
+
     //cout << "info str is: " << info_str << endl;
 
     // now parse the string
@@ -656,6 +668,50 @@ void LSDSpatialCSVReader::get_x_and_y_from_latlong(vector<float>& UTME,vector<fl
 }
 
 //==============================================================================
+// This gets the x and y locations from specified columns
+//==============================================================================
+void LSDSpatialCSVReader::get_x_and_y_from_latlong_specify_columns(string lat_column_name,
+  string long_column_name, vector<float>& UTME,vector<float>& UTMN)
+{
+  // initilise the converter
+  LSDCoordinateConverterLLandUTM Converter;
+
+  // get the data to vectors
+  vector<float> lat_data = data_column_to_float(lat_column_name);
+  vector<float> long_data = data_column_to_float(long_column_name);
+
+  int N_samples =  int(long_data.size());
+
+  // set up some temporary vectors
+  vector<float> this_UTMN(N_samples,0);
+  vector<float> this_UTME(N_samples,0);
+
+  double this_Northing;
+  double this_Easting;
+
+  int UTM_zone;
+  bool is_North;
+  get_UTM_information(UTM_zone, is_North);
+
+
+  // loop throught the samples collecting UTM information
+  int eId = 22;             // defines the ellipsiod. This is WGS
+  for(int i = 0; i<N_samples; i++)
+  {
+    //cout << "Converting point " << i << " to UTM." << endl;
+    Converter.LLtoUTM_ForceZone(eId, lat_data[i], long_data[i],
+                      this_Northing, this_Easting, UTM_zone);
+    this_UTMN[i] = this_Northing;
+    this_UTME[i] = this_Easting;
+    //cout << "Easting: " << this_Easting << " and northing: " << this_Northing << endl;
+  }
+
+  UTME = this_UTME;
+  UTMN = this_UTMN;
+}
+
+
+//==============================================================================
 // This gets the latitude and longitude from x and y columns
 //==============================================================================
 void LSDSpatialCSVReader::get_latlong_from_x_and_y(string X_column_name, string Y_column_name)
@@ -727,9 +783,9 @@ void LSDSpatialCSVReader::burn_raster_data_to_csv(LSDRaster& ThisRaster,string c
   vector<float> UTMN;
   float this_UTME, this_UTMN;
   float this_value;
-  
-  vector<string> new_column_data; 
-  
+
+  vector<string> new_column_data;
+
   // The csv file needs to have lat-long data
   if (not check_if_latitude_and_longitude_exist())
   {
@@ -738,15 +794,19 @@ void LSDSpatialCSVReader::burn_raster_data_to_csv(LSDRaster& ThisRaster,string c
   }
   else
   {
+    //cout << "Let me get the x and y data." << endl;
     get_x_and_y_from_latlong(UTME,UTMN);
     int n_nodes = int(UTME.size());
     for(int i = 0; i<n_nodes; i++)
     {
+      stringstream s;
       this_UTME = UTME[i];
       this_UTMN = UTMN[i];
-      
+
       this_value = ThisRaster.get_value_of_point(this_UTME, this_UTMN);
-      new_column_data.push_back(itoa(this_value));
+      //cout << "Node is: " << i << " and value is: " << this_value << endl;
+      s << this_value;
+      new_column_data.push_back(s.str());
     }
     data_map[column_name] = new_column_data;
   }
@@ -762,9 +822,9 @@ void LSDSpatialCSVReader::burn_raster_data_to_csv(LSDIndexRaster& ThisRaster,str
   vector<float> UTMN;
   float this_UTME, this_UTMN;
   int this_value;
-  
-  vector<string> new_column_data; 
-  
+
+  vector<string> new_column_data;
+
   // The csv file needs to have lat-long data
   if (not check_if_latitude_and_longitude_exist())
   {
@@ -779,11 +839,12 @@ void LSDSpatialCSVReader::burn_raster_data_to_csv(LSDIndexRaster& ThisRaster,str
     {
       this_UTME = UTME[i];
       this_UTMN = UTMN[i];
-      
       this_value = ThisRaster.get_value_of_point(this_UTME, this_UTMN);
       new_column_data.push_back(itoa(this_value));
     }
+
     data_map[column_name] = new_column_data;
+
   }
 }
 
@@ -871,7 +932,7 @@ LSDSpatialCSVReader LSDSpatialCSVReader::select_data_to_new_csv_object(string se
   int n_nodes = int(select_column.size());
   vector<int> selected_indices;
   string this_item;
-  
+
   for(int i = 0; i<n_nodes; i++)
   {
     //cout << "Looking for: " << select_column[i] << endl;
@@ -881,29 +942,29 @@ LSDSpatialCSVReader LSDSpatialCSVReader::select_data_to_new_csv_object(string se
       selected_indices.push_back(i);
     }
   }
-  
+
   // now we need to go through the data and remove the rows that don't meet selection
   int n_selected_nodes = int(selected_indices.size());
   map<string, vector<string> > new_data_map;
   vector<string> empty_vec;
   vector<double> new_latitude;
   vector<double> new_longitude;
-  
+
   // set up the new data map
   for( map<string, vector<string> >::iterator it = data_map.begin(); it != data_map.end(); ++it)
   {
     //cout << "Key is: " <<it->first << "\n";
     new_data_map[it->first] = empty_vec;
   }
-  
+
   int this_index;
   for(int i = 0; i<n_selected_nodes; i++)
   {
     this_index = selected_indices[i];
-    
+
     new_latitude.push_back(latitude[this_index]);
     new_longitude.push_back(longitude[this_index]);
-    
+
     // now loop through the data map
     for( map<string, vector<string> >::iterator it = data_map.begin(); it != data_map.end(); ++it)
     {
@@ -912,7 +973,7 @@ LSDSpatialCSVReader LSDSpatialCSVReader::select_data_to_new_csv_object(string se
       new_data_map[it->first].push_back(element);
     }
   }
-  
+
   // now create the new csv object
   vector<bool> new_in_raster_vec;
   LSDSpatialCSVReader new_csv(NRows,NCols,XMinimum,YMinimum,DataResolution,
@@ -1014,12 +1075,27 @@ void LSDSpatialCSVReader::print_data_to_csv(string csv_outname)
     outfile << "," <<it->first;
   }
   outfile << endl;
-  
+
   int N_nodes = int(latitude.size());
   for (int i = 0; i < N_nodes; i++)
   {
     outfile.precision(9);
-    outfile << latitude[i] << "," << longitude[i];
+    
+    double this_longitude;
+    if (longitude[i] > 180)
+    {
+      this_longitude = longitude[i]-360.0;
+    }
+    else if (longitude[i] < -180)
+    {
+      this_longitude = 360.0+longitude[i];
+    }
+    else
+    {
+      this_longitude = longitude[i];
+    }
+    
+    outfile << latitude[i] << "," << this_longitude;
     for( map<string, vector<string> >::iterator it = data_map.begin(); it != data_map.end(); ++it)
     {
       outfile << "," <<it->second[i];
@@ -1043,17 +1119,33 @@ void LSDSpatialCSVReader::print_data_to_geojson(string json_outname)
     ofstream outfile;
     outfile.precision(9);
     outfile.open(json_outname.c_str());
-    
+
     outfile << "{" << endl;
     outfile << "\"type\": \"FeatureCollection\"," << endl;
     outfile << "\"crs\": { \"type\": \"name\", \"properties\": { \"name\": \"urn:ogc:def:crs:OGC:1.3:CRS84\" } }," << endl;
     outfile << "\"features\": [" << endl;
-    
+
     int n_nodes = int(latitude.size());
     for(int i = 0; i< n_nodes; i++)
     {
+      double this_longitude;
+      if (longitude[i] > 180)
+      {
+        this_longitude = longitude[i]-360.0;
+      }
+      else if (longitude[i] < -180)
+      {
+        this_longitude = 360.0+longitude[i];
+      }
+      else
+      {
+        this_longitude = longitude[i];
+      }
+      
+      
       string first_bit = "{ \"type\": \"Feature\", \"properties\": { \"latitude\": ";
-      string second_bit = dtoa(latitude[i])+", \"longitude\": "+ dtoa(longitude[i]);
+      //string second_bit = dtoa(latitude[i])+", \"longitude\": "+ dtoa(this_longitude);
+      string second_bit = ", \"longitude\": ";
 
       string third_bit;
       for( map<string, vector<string> >::iterator it = data_map.begin(); it != data_map.end(); ++it)
@@ -1061,13 +1153,16 @@ void LSDSpatialCSVReader::print_data_to_geojson(string json_outname)
         third_bit += ", \""+it->first+"\": "+(it->second)[i];
       }
       string fourth_bit = " }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ ";
-      string fifth_bit = dtoa(longitude[i]) +","+ dtoa(latitude[i]) +" ] } },";
-      
-      outfile << first_bit+second_bit+third_bit+fourth_bit+fifth_bit << endl;
+      //string fifth_bit = dtoa(this_longitude) +","+ dtoa(latitude[i]) +" ] } },";
+      string fifth_bit = " ] } },";
+
+      outfile << first_bit << latitude[i] << second_bit << this_longitude
+              << third_bit+fourth_bit << this_longitude << "," << latitude[i] << fifth_bit 
+              << endl;
     }
     outfile << "]" << endl;
     outfile << "}" << endl;
-    
+
     outfile.close();
   }
   else

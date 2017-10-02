@@ -245,7 +245,7 @@ void LSDParameterParser::LSDPP_parse_file_into_parameter_map(string FullName)
 // This uses the parameter map to get file input and output
 void LSDParameterParser::parse_file_IO()
 {
-
+  bool found_cheads = false;
   if(parameter_map.find("dem read extension") != parameter_map.end())
   {
     dem_read_extension = parameter_map["dem read extension"];
@@ -291,10 +291,45 @@ void LSDParameterParser::parse_file_IO()
     // get rid of any control characters from the end (if param file was made in DOS)
     CHeads_file = RemoveControlCharactersFromEndOfString(CHeads_file);
     //cout << "Got the channel heads name, it is: " << CHeads_file << endl;
+    if(found_cheads)
+    {
+      cout << "Warning, channel head file is being overwritten--you have it twice in parameter file." << endl;
+    }
+    found_cheads = true;
   }
   else
   {
     CHeads_file = "NULL";
+  }
+  if(parameter_map.find("baselevel junctions fname") != parameter_map.end())
+  {
+    BaselevelJunctions_file = parameter_map["baselevel junctions fname"];
+    // get rid of any control characters from the end (if param file was made in DOS)
+    BaselevelJunctions_file = RemoveControlCharactersFromEndOfString(BaselevelJunctions_file);
+  }
+  else
+  {
+    BaselevelJunctions_file = "NULL";
+  }
+  if(parameter_map.find("channel segments fname") != parameter_map.end())
+  {
+    ChannelSegments_file = parameter_map["channel segments fname"];
+    // get rid of any control characters from the end (if param file was made in DOS)
+    ChannelSegments_file = RemoveControlCharactersFromEndOfString(ChannelSegments_file);
+  }
+  else
+  {
+    ChannelSegments_file = "NULL";
+  }
+  if(parameter_map.find("floodplain fname") != parameter_map.end())
+  {
+    Floodplain_file = parameter_map["floodplain fname"];
+    // get rid of any control characters from the end (if param file was made in DOS)
+    Floodplain_file = RemoveControlCharactersFromEndOfString(Floodplain_file);
+  }
+  else
+  {
+    Floodplain_file = "NULL";
   }
 }
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

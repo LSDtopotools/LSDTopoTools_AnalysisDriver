@@ -435,7 +435,7 @@ class LSDRaster
   /// @param interpolated data the actual data that has been interpolated
   /// @author SMM
   /// @date 17/02/2017
-  LSDRaster fill_with_interpolated_data(vector<int> rows_of_nodes, vector<int> cols_of_nodes, 
+  LSDRaster fill_with_interpolated_data(vector<int> rows_of_nodes, vector<int> cols_of_nodes,
                                         vector<float> interpolated_data);
 
   /// @brief This gets the value at a point in UTM coordinates
@@ -499,6 +499,11 @@ class LSDRaster
   /// @author SMM
   /// @date 18/02/14
   void rewrite_with_random_values(float range);
+
+  /// @brief Create a raster in of the same number of rows and cols with nodata
+  /// @author FJC
+  /// @date 07/04/17
+  LSDRaster create_raster_nodata();
 
   /// @brief Calculate the minimum bounding rectangle for an LSDRaster Object and crop out
   /// all the surrounding NoDataValues to reduce the size and load times of output rasters.
@@ -688,6 +693,9 @@ class LSDRaster
   /// @date 16/02/2014
   void DSSetFeatureCorners(int featuresize, float scale);
 
+
+
+
   /// @brief This is the square sampling step of the diamond square algorithm: it takes
   /// the average of the four corners and adds a random number to set the centrepoint
   /// of a square.
@@ -726,7 +734,9 @@ class LSDRaster
   /// in each direction to have rows and columns that are the nearest powers
   /// of 2. The xllocation and yllocation data values are preserved. The function
   /// returns a pseudo fractal landscape generated with the diamond square algorithm
-  ///
+  /// Believe it or not this algorithm is absed on code poseted by Notch, the creator of Minecraft,
+  /// who then had it modified by Charles Randall
+  /// https://www.bluh.org/code-the-diamond-square-algorithm/
   /// @param feature order is an interger n where the feature size consists of 2^n nodes.
   /// If the feature order is set bigger than the dimensions of the parent raster then
   /// this will default to the order of the parent raster.
@@ -735,6 +745,7 @@ class LSDRaster
   /// @author SMM
   /// @date 16/02/2014
   LSDRaster DiamondSquare(int feature_order, float scale);
+
 
   // Functions relating to shading, shadowing and shielding
 
@@ -1046,6 +1057,13 @@ class LSDRaster
   /// @author FJC
   /// @date 24/03/14
   LSDRaster remove_positive_hilltop_curvature(LSDRaster& hilltop_curvature);
+
+  /// @brief Removes positive values from a raster
+  /// @details Modifies araster to remove pixels with
+  /// positive values
+  /// @author MDH
+  /// @date 25/07/17
+  void remove_positive_values();
 
   /// @brief Gets the percentage of bedrock ridges
   /// @details Uses the hilltop curvature raster and the roughness raster. If the
@@ -2077,6 +2095,12 @@ class LSDRaster
   /// @date 27/08/2014
   LSDRaster ExtractByMask(LSDIndexRaster Mask);
 
+  /// @brief Function to update an LSDRaster based on a LSDIndexRaster mask
+  /// @param LSDIndexRaster TheMask
+  /// @author MDH
+  /// @date 26/07/2017
+  void MaskRaster(LSDIndexRaster Mask);
+
   /// @brief method to locate channel pixels outlined by Lashermes.
   ///
   /// @detail picks departure from gaussian behaviour, then uses this as a threshold to create a binary dataset.
@@ -2186,6 +2210,14 @@ class LSDRaster
   /// @author FJC
   /// @date 30/09/16
 	LSDRaster MergeRasters(LSDRaster& RasterToAdd);
+
+  /// @brief Method to merge data from two LSDRasters WITH SAME EXTENT together.  /// The data from the raster specified as an argument will be added (will
+  /// overwrite the original raster if there is a conflict). Overloaded function to rewrite original raster
+  /// rather than creating a new one
+  /// @param RasterToAdd second raster to add to original raster
+  /// @author FJC
+  /// @date 07/04/17
+  void OverwriteRaster(LSDRaster& RasterToAdd);
 
   /// @brief Function to get potential floodplain patches using a slope and relief threshold
   /// @param Relief raster with relief values

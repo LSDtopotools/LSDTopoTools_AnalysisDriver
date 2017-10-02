@@ -186,7 +186,7 @@ class LSDBasin
   /// @return Percentile value.
   /// @author SWDG
   /// @date 5/2/17
-  float CalculateBasinPercentile(LSDFlowInfo& FlowInfo, LSDRaster Data, int Percentile); 
+  float CalculateBasinPercentile(LSDFlowInfo& FlowInfo, LSDRaster Data, int Percentile);
 
   /// @brief Calculate the Standard Deviation of values of an LSDRaster which falls inside a basin.
   /// @param FlowInfo Flowinfo object.
@@ -384,6 +384,13 @@ class LSDBasin
   /// @author SWDG
   /// @date 12/12/13
   void set_Perimeter(LSDFlowInfo& FlowInfo);
+
+  /// @brief Prints the perimeter nodes to a csv file
+  /// @param FlowInfo the LSDFlowInfo object
+  /// @param string perimeter_fname
+  /// @author SMM
+  /// @date 26/04/2017
+  void print_perimeter_to_csv(LSDFlowInfo& FlowInfo, string perimeter_fname);
 
   /// @brief Set the four different hillslope length measurements for the basin.
   /// @param FlowInfo Flowinfo object.
@@ -716,6 +723,14 @@ LSDRaster TrimPaddedRasterToBasin(int padding_pixels, LSDFlowInfo& FlowInfo,
   /// @author SWDG
   /// @date 07/12/14
   LSDRaster Merge_Basins(vector<LSDRaster> Basins);
+
+
+  /// @brief Count the number of each unique lithology value contain in the basin from a topographic raster
+  /// take a lithologic raster and a topographic raster in argument
+  ///
+  /// @author BG
+  /// @date 17/09/17
+  map<int,int> count_unique_values_from_litho_raster(LSDIndexRaster& litho, LSDFlowInfo& topo) ;
 
   protected:
 

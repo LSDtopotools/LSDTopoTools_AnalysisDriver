@@ -81,6 +81,10 @@ vector<float> simple_linear_regression(vector<float>& x_data, vector<float>& y_d
 float get_mean(vector<float>& y_data);
 float get_mean_ignore_ndv(vector<float>& y_data, float ndv);
 float get_mean_ignore_ndv(Array2D<float>& data, float ndv);
+float get_median(vector<float> y_data);
+float get_median_sorted(vector<float> sorted_y_data);
+float get_median_absolute_deviation(vector<float> y_data, float median);
+vector<float> get_IQR_and_median(vector<float> y_data);
 float get_SST(vector<float>& y_data, float mean);
 float get_variance_ignore_ndv(Array2D<float>& data, float ndv, float mean);
 float get_range_ignore_ndv(Array2D<float>& data, float ndv);
@@ -91,7 +95,18 @@ float get_durbin_watson_statistic(vector<float> residuals);
 float get_standard_deviation(vector<float>& y_data, float mean);
 float get_standard_error(vector<float>& y_data, float standard_deviation);
 vector<float> get_common_statistics(vector<float>& y_data);
+vector<float> calculate_descriptive_stats(vector<float>& data);
 float get_percentile(vector<float>& data, float percentile);
+
+// orthogonal regression
+// 01/04/2017 SMM No foolin
+// This comes from davegiles.blogspot.co.uk/2014/11/orthogonal-regression-first-steps.html
+// NOTE: THis is more generally called Total Least Squares
+//  There is a solution using matrices that is probably compuationally faster
+//  Might want to implement that in the future if this is slow
+//  Note R^2 from simple linear regression
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+vector<float> orthogonal_linear_regression( vector<float>& x_data, vector<float>& y_data, float& intercept, float& gradient, float& R_squared);
 
 // this function gets the difference between nearest neighbours in a vector of y data
 // FJC 10/11/15
@@ -113,6 +128,14 @@ void quantile_quantile_analysis(vector<float>& data, vector<float>& values, vect
 // declaration of the quantile_quantile analysis
 // modified to pass in percentiles as arguments
 void quantile_quantile_analysis_defined_percentiles(vector<float>& data, vector<float>& values, vector<float>& standard_normal_variates, vector<float>& mn_values, int N_points, int lower_percentile, int upper_percentile);
+
+// Bootstrapping of linear regressions
+// N_iterations is the number of bootstrap iterations
+// acceptance probablility is the probability that you will accept any given data point
+// in an iteration. This runs without replacement
+// Returns summary statistics (see cpp code for details)
+vector<float> bootstrap_linear_regression(vector<float>& x_data, vector<float>& y_data, int N_iterations, float acceptance_prob);
+
 
 // calculates least squares linear regression for two datasets, returning
 // gradient and intercept of regression line, alongside the R-squared value.
@@ -289,6 +312,11 @@ vector<float> change_normalized_like_vector_to_new_sigma(float sigma, vector<flo
 void find_linear_segments(vector<float>& all_x_data, vector<float>& all_y_data, int segment_length);
 
 
+// functions for combinations
+void combinations(vector<int> v, int start, int n, int k, int maxk);
+void combinations(vector<int> v, int start, int n, int k, int maxk, vector< vector<int> >& combovecvec);
+vector< vector<int> > combinations (int n, int k, bool zero_indexed);
+
 // functions for partitioning and permutation (to be used with linear segment finding
 int partitions_min( int x, int y);
 void partition_print(int t, vector<int>& p);
@@ -314,6 +342,9 @@ void generate_random_segments(float sigma, int minimum_n_nodes, int mean_segment
 float calculate_MLE(vector<float>& measured, vector<float>& modelled, vector<float>& sigma);
 float calculate_MLE(vector<float>& measured, vector<float>& modelled, float sigma);
 float calculate_MLE_from_residuals(vector<float>& residuals, float sigma);
+
+// RMSE estimator
+float calculate_RMSE_from_residuals(vector<float>& residuals);
 
 // a random number generator
 float ran3( long *idum );
@@ -366,6 +397,19 @@ void bin_data(vector<float>& InputVectorX, vector<float>& InputVectorY, float bi
                       vector<float>&  StandardDeviationX_output, vector<float>&  StandardDeviationY_output,
                       vector<float>& StandardErrorX_output, vector<float>& StandardErrorY_output,
                       vector<int>& number_observations_output, float& bin_lower_limit, float NoDataValue);
+
+// Regular binning algoritm for data stored in a 1D vector Similar to above but spits out more stats
+void bin_data(vector<float>& InputVectorX, vector<float>& InputVectorY, float bin_width,
+              vector<float>& midpoints_output, vector<float>&  MeanX_output, 
+              vector<float>&  MedianX_output, vector<float>&  StandardDeviationX_output,
+              vector<float>& StandardErrorX_output, vector<float>& MADX_output, 
+              vector<float>& MeanY_output, vector<float>& MinimumY_output,
+              vector<float>& FirstQuartileY_output, vector<float>& MedianY_output,
+              vector<float>& ThirdQuartileY_output, vector<float>& MaximumY_output,
+              vector<float>&  StandardDeviationY_output, vector<float>& StandardErrorY_output, 
+              vector<float>& MADY_output, vector<int>& number_observations_output,
+              float NoDataValue); 
+
 
 //look for empty bins output from the log binning function and removes them to avoid
 //plotting several empty bins at 0,0 in some cases. SWDG 6/11/13
@@ -434,6 +478,25 @@ double rad(double degree);
 // conversion from radians to degrees
 float deg(float radians);
 double deg(double radians);
+
+// Get the angle between two vectors
+float angle_between_vectors(float x1, float y1, float x2, float y2);
+
+// Get the angle between two vectors in radians
+// We need to calculate the (x1,y1) and (x2,y2) coordinates by moving
+// the vectors to intercept (0,0)
+// the bool vectors_point_downstream is true if the vector's first element is the 
+// upstream node in a channel and false if the first node is downstream. 
+float angle_between_two_vector_datasets(vector<float>& x1_data, vector<float>& y1_data,
+                                        vector<float>& x2_data, vector<float>& y2_data,
+                                        bool vectors_point_downstream);
+
+// This function takes x and y data as vectors and returns a 2 element vector
+// where the 0 element is the x1 component of a directional vector 
+// and the 1 element is the y1 component of a directional vector
+// vector vector vector, Victor. 
+vector<float> get_directional_vector_coords_from_dataset(vector<float> x1_data, vector<float>& y_data, 
+                      bool vectors_point_downstream);
 
 // Get the data for a boxplot from an unsorted vector of floats, which does not
 // contain any NDV values.

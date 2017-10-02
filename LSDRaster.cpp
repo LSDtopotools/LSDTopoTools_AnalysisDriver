@@ -1655,7 +1655,7 @@ void LSDRaster::get_easting_and_northing_vectors(vector<float>& Eastings, vector
 {
   vector<float> this_easting;
   vector<float> this_northing;
-  
+
   for (int row = 0; row < NRows; row++)
   {
     this_northing.push_back(YMinimum + float(NRows-row)*DataResolution - 0.5*DataResolution);
@@ -1664,7 +1664,7 @@ void LSDRaster::get_easting_and_northing_vectors(vector<float>& Eastings, vector
   {
     this_easting.push_back(XMinimum + float(col)*DataResolution + 0.5*DataResolution);
   }
-  
+
   Eastings = this_easting;
   Northings = this_northing;
 }
@@ -1679,38 +1679,38 @@ vector<float> LSDRaster::interpolate_points_bilinear(vector<float> UTMEvec, vect
   vector<float> Northings;
   vector<float> New_northings;
   get_easting_and_northing_vectors(Eastings, Northings);
-  
+
   // we need to reverse the northing vecor
   int n_north = int(Northings.size());
   for (int i = 0; i<n_north; i++)
   {
     New_northings.push_back(Northings[NRows-1-i]);
   }
-  
+
   // This is quite annoying since the number of rows in the raster is the first dimension
-  // and the number of columns is the second dimension. 
+  // and the number of columns is the second dimension.
   // Also the raster is inverted so we need to change the direction of the x vector
   //cout << "The size of the easting is: " << Eastings.size() << " N: " << Northings.size() << endl;
   //cout << "D1: " << RasterData.dim1() << " D2: " << RasterData.dim2() << endl;
-  
+
   if (RasterData.dim2() != int(Eastings.size()))
   {
     cout << "Something has gone wrong with the dimensions of the x and y data for interpolation" << endl;
     cout << "LSDRaster::interpolate_points_bilinear" << endl;
     exit(EXIT_FAILURE);
   }
-  
+
   vector<float> interp_data;
   float this_data;
-  
+
   int n_samples = int(UTMEvec.size());
-  
+
   if(UTMEvec.size() != UTMNvec.size())
   {
     cout << "LSDRaster::interpolate_points_bilinear you x and y vecs are not the same size, prepare for segmentation." << endl;
   }
-  
-  
+
+
   Array2D<float> flipped(NCols,NRows);
   for(int row = 0; row<NRows; row++)
   {
@@ -1720,22 +1720,22 @@ vector<float> LSDRaster::interpolate_points_bilinear(vector<float> UTMEvec, vect
     }
   }
 
-  
-  
+
+
   for(int i = 0; i<n_samples; i++)
   {
     //cout << "Sample is: " << i << " of " << n_samples << endl;
     //cout << "eastings: " << Eastings[0] << " " << Eastings[NRows-1] << endl;
     //cout << "Northings: " << Northings[0] << " " << Northings[NCols-1] << endl;
     //cout << "e: " << UTMEvec[i] << " n: " << UTMNvec[i] << endl;
-    
+
     // this stupid ordering is due to the fact that the rows are first dimension
-    // and the 
+    // and the
     this_data = interp2D_bilinear(Eastings, New_northings, flipped,
                                   UTMEvec[i],UTMNvec[i]);
     interp_data.push_back(this_data);
   }
-  
+
   return interp_data;
 }
 
@@ -1754,7 +1754,7 @@ LSDRaster LSDRaster::fill_with_interpolated_data(vector<int> node_rows,
   {
     NewArray[node_rows[i]][node_cols[i]]= interpolated_data[i];
   }
-  
+
   //create LSDRaster object
   LSDRaster NewRaster(NRows, NCols, XMinimum, YMinimum, DataResolution,
                                NoDataValue, NewArray, GeoReferencingStrings);
@@ -1769,7 +1769,7 @@ float LSDRaster::get_value_of_point(float UTME, float UTMN)
 {
   float this_value = NoDataValue;
   int row,col;
-  
+
   bool is_in_raster = check_if_point_is_in_raster(UTME, UTMN);
   if (is_in_raster)
   {
@@ -2005,6 +2005,17 @@ void LSDRaster::rewrite_with_random_values(float range)
       RasterData[row][col] = ran3(&seed)*range;
     }
   }
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Create a raster of nodata values in the shape of the input
+// FJC 07/04/17
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+LSDRaster LSDRaster::create_raster_nodata()
+{
+  Array2D<float> NDV_Array(NRows,NCols,NoDataValue);
+  LSDRaster NDV_Raster(NRows, NCols, XMinimum, YMinimum, DataResolution, NoDataValue, NDV_Array, GeoReferencingStrings);
+  return NDV_Raster;
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -2629,6 +2640,10 @@ void LSDRaster::DiamondSquare_SampleStep(int stepsize, float scale)
 // it creates a resized diamond square pseudo-fractal raster
 // it has the same xllcorner and yllcorner as the original raster,
 // but is resized so the NRows and NCols are to the closed power of 2
+//
+// Believe it or not I lifted this algorithm from Notch, the creator of Minecraft,
+// who posted it online and then had it modified by Charles Randall
+// https://www.bluh.org/code-the-diamond-square-algorithm/
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 LSDRaster LSDRaster::DiamondSquare(int feature_order, float scale)
 {
@@ -2692,7 +2707,6 @@ LSDRaster LSDRaster::DiamondSquare(int feature_order, float scale)
     return DSRaster;
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
 
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -3432,8 +3446,8 @@ vector<LSDRaster> LSDRaster::calculate_polyfit_surface_metrics(float window_radi
 
   // Move window over DEM, fitting 2nd order polynomial surface to the
   // elevations within the window.
-  cout << "\n\tRunning 2nd order polynomial fitting" << endl;
-  cout << "\t\tDEM size = " << NRows << " x " << NCols << endl;
+  //cout << "\n\tRunning 2nd order polynomial fitting" << endl;
+  //cout << "\t\tDEM size = " << NRows << " x " << NCols << endl;
   int ndv_present = 0;
 
   for(int i=0;i<NRows;++i)
@@ -4886,6 +4900,29 @@ LSDRaster LSDRaster::remove_positive_hilltop_curvature(LSDRaster& hilltop_curvat
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//
+// REMOVE POSITIVE VALUES FROM RASTER
+// This function removes positive values from a raster, for use with hilltop curvature values
+//
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDRaster::remove_positive_values()
+{
+  for (int row = 0; row < NRows; row++)
+  {
+    for (int col = 0; col < NCols; col++)
+    {
+      if (RasterData[row][col] >= 0)
+      {
+        RasterData[row][col] = NoDataValue;
+      }
+    }
+  }
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
   //
@@ -5448,11 +5485,11 @@ void LSDRaster::calculate_roughness_rasters(float window_radius, float roughness
     string remainder_str = itoa(decimal_ten_str);
     string p_str = "p";
     string window_size_str = window_number_str+p_str+remainder_str;
-    
+
     // switch to bil format 09/03/2017
     string DEM_flt_extension = "bil";
-    
-    
+
+
     string underscore = "_";
 
     int roughness_int = int(roughness_radius);
@@ -10716,7 +10753,7 @@ LSDIndexRaster LSDRaster::Create_Mask(string Condition, float TestValue)
   //declare mask array
   Array2D<int> Mask(NRows,NCols,NoDataValue);
 
-  cout << "Creating Mask: Condition is " << Condition << endl;
+  //cout << "Creating Mask: Condition is " << Condition << endl;
   for (int i=0; i<NRows; ++i)
   {
     for (int j=0; j<NCols; ++j)
@@ -10761,7 +10798,7 @@ LSDRaster LSDRaster::ExtractByMask(LSDIndexRaster Mask)
   {
     for (int j=0; j<NCols; ++j)
     {
-      if (MaskArray[i][j] == 1)
+      if (MaskArray[i][j] > 0)
       {
         MaskedArray[i][j] = RasterData[i][j];
       }
@@ -10769,6 +10806,32 @@ LSDRaster LSDRaster::ExtractByMask(LSDIndexRaster Mask)
   }
   LSDRaster MaskedRaster(NRows,NCols,XMinimum,YMinimum,DataResolution,NoDataValue,MaskedArray,GeoReferencingStrings);
   return MaskedRaster;
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Extract values by mask and update existing LSDRaster object
+//
+// MDH, 26/7/17
+//
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+void LSDRaster::MaskRaster(LSDIndexRaster Mask)
+{
+  // declare new array
+  Array2D<float> MaskedArray(NRows,NCols,NoDataValue);
+  Array2D<int> MaskArray = Mask.get_RasterData();
+  int NDV = Mask.get_NoDataValue();
+
+  for (int i=0; i<NRows; ++i)
+  {
+    for (int j=0; j<NCols; ++j)
+    {
+      if (MaskArray[i][j] == NDV)
+      {
+        RasterData[i][j] = NoDataValue;
+      }
+    }
+  }
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -11230,7 +11293,7 @@ LSDIndexRaster LSDRaster::create_binary_isdata_raster()
       }
     }
   }
-  
+
   LSDIndexRaster IsDataRaster(NRows,NCols,XMinimum,YMinimum,DataResolution,
                          int(NoDataValue),IsDataArray,GeoReferencingStrings);
   return IsDataRaster;
@@ -12660,11 +12723,34 @@ LSDRaster LSDRaster::MergeRasters(LSDRaster& RasterToAdd)
 }
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Method to merge data from two LSDRasters WITH SAME EXTENT together.  The data from the
+// raster specified as an argument will be added (will overwrite the original raster if there
+// is a conflict).
+// Overloaded function that overwrites the raster rather than creating a new one.
+// FJC 07/04/17
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDRaster::OverwriteRaster(LSDRaster& RasterToAdd)
+{
+	Array2D<float> SecondRasterData = RasterToAdd.get_RasterData();
+
+	for (int row = 0; row < NRows; row++)
+	{
+		for (int col = 0; col < NCols; col++)
+		{
+			// no data in first raster, data in second raster
+			if (SecondRasterData[row][col] != NoDataValue)
+			{
+				RasterData[row][col] = SecondRasterData[row][col];
+			}
+		}
+	}
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // Function to get potential floodplain patches using a slope and relief threshold
 // FJC 20/10/15
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-LSDIndexRaster LSDRaster::get_potential_floodplain_patches(LSDRaster& Relief, LSDRaster& Slope, float relief_threshold,
-                                                     float slope_threshold)
+LSDIndexRaster LSDRaster::get_potential_floodplain_patches(LSDRaster& Relief, LSDRaster& Slope, float relief_threshold, float slope_threshold)
 {
   Array2D<int> FloodplainArray(NRows,NCols,0);
 
