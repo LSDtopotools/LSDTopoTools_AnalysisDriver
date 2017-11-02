@@ -1,4 +1,50 @@
-
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//
+// LSDBasin
+// Land Surface Dynamics Basin
+//
+// An object within the University
+//  of Edinburgh Land Surface Dynamics group topographic toolbox
+//  for manipulating
+//  and analysing basins
+//
+// Developed by:
+//  Stuart W.D. Grieve
+//  Simon M. Mudd
+//  Fiona Clubb
+//
+// Copyright (C) 2017 Simon M. Mudd 2017
+//
+// Developer can be contacted by simon.m.mudd _at_ ed.ac.uk
+//
+//    Simon Mudd
+//    University of Edinburgh
+//    School of GeoSciences
+//    Drummond Street
+//    Edinburgh, EH8 9XP
+//    Scotland
+//    United Kingdom
+//
+// This program is free software;
+// you can redistribute it and/or modify it under the terms of the
+// GNU General Public License as published by the Free Software Foundation;
+// either version 2 of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY;
+// without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// See the GNU General Public License for more details.
+//
+// You should have received a copy of the
+// GNU General Public License along with this program;
+// if not, write to:
+// Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor,
+// Boston, MA 02110-1301
+// USA
+//
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 #ifndef LSDBasin_CPP
 #define LSDBasin_CPP
@@ -755,7 +801,7 @@ void LSDBasin::print_perimeter_to_csv(LSDFlowInfo& FlowInfo, string perimeter_fn
   int n_nodes = int(Perimeter_nodes.size());
   for(int i = 0; i< n_nodes; i++)
   {
-    FlowInfo.get_x_and_y_from_current_node(Perimeter_nodes[i], curr_x, curr_x);
+    FlowInfo.get_x_and_y_from_current_node(Perimeter_nodes[i], curr_x, curr_y);
     FlowInfo.get_lat_and_long_from_current_node(Perimeter_nodes[i], curr_lat, curr_long,converter);
     perim_out << Perimeter_nodes[i] << "," << curr_x << "," << curr_y <<"," << curr_lat << "," << curr_long << endl;
   }
@@ -1386,6 +1432,167 @@ map<int,int> LSDBasin::count_unique_values_from_litho_raster(LSDIndexRaster& lit
   //return the results
   return lithost;
 }
+
+
+bool LSDBasin::is_adjacent(LSDBasin& DifferentBasin, LSDFlowInfo& flowpy)
+{
+  // Check if the perimeter has been calculated, and set it if not
+  if(Perimeter_nodes.size() == 1){set_Perimeter(flowpy);}
+  //
+  //cout << "I will check if the two basins are adjacents" << endl;
+  // this is a comment
+  // Perimeter nodes of the other basin + proceeding to a test if the other basin's perimeter has been calculated
+  vector<int> DB_perimeter_nodes = DifferentBasin.get_Perimeter_nodes();
+  if(DB_perimeter_nodes.size() == 1){DifferentBasin.set_Perimeter(flowpy); DB_perimeter_nodes =  DifferentBasin.get_Perimeter_nodes();}
+  // 
+
+  // cout << Perimeter_nodes.size() << "|||||" << DB_perimeter_nodes.size() << endl;
+  bool adjacenty = false;
+  int this_row = 0;
+  int this_col = 0;
+  int tested_node = 0;
+  //Preprocessing looping
+  static const int arr[] = {-1,0,1};
+  vector<int> mongoose (arr, arr + sizeof(arr) / sizeof(arr[0]) );
+  // Now looping through the neiboor nodes of each perimeter nodes of the first basin, then check if it is in the second one. stop the process if one node is found
+  for(size_t flude = 0; flude<Perimeter_nodes.size() && adjacenty == false ;flude++)
+  {
+    flowpy.retrieve_current_row_and_col(Perimeter_nodes[flude], this_row, this_col);
+    for(size_t impala = 0; impala < mongoose.size() && adjacenty == false; impala ++)
+    {
+      for(size_t peccary = 0; peccary < mongoose.size() && adjacenty == false; peccary ++)
+        if((this_row + mongoose[impala]>=0)&&(this_row + mongoose[impala]< flowpy.get_NRows())&&(this_col+ mongoose[peccary] >=0)&&(this_col+ mongoose[peccary]<flowpy.get_NCols()))
+        {
+          tested_node = flowpy.retrieve_node_from_row_and_column(this_row + mongoose[impala],this_col+ mongoose[peccary]);
+          if(find(DB_perimeter_nodes.begin(), DB_perimeter_nodes.end(), tested_node) != DB_perimeter_nodes.end()){adjacenty=true;}
+        }
+    }
+
+  }  
+  return adjacenty;
+}
+
+/// @brief merge and contour the perimeter from a vector of adjacent basins
+/// @detail WARNING There may be 1 pixel-size holes in the perimeter.
+/// @param vector of LSDBasin objects
+/// @return vector of node indices of the new perimeter
+/// @author BG
+/// @date 10/10/17
+vector<int> LSDBasin::merge_perimeter_nodes_adjacent_basins(vector<LSDBasin> budgerigar,LSDFlowInfo& flowpy)
+{
+  // getting and checking the perimeter for the the first basin
+  vector<int> out_perimeter;
+  vector<int> first_perimeter;
+
+  // other variables
+  vector<int> temp_perimeter;
+  bool adjacenty = false;
+  int this_row = 0;
+  int this_col = 0;
+  int tested_node = 0;
+
+
+  for(int basilisk = 0; basilisk< int(budgerigar.size());basilisk++)
+  {
+    // Getting and checking the existence of the perimeter node
+    first_perimeter = budgerigar[basilisk].get_Perimeter_nodes();
+    if(first_perimeter.size() == 1){budgerigar[basilisk].set_Perimeter(flowpy);first_perimeter = budgerigar[basilisk].get_Perimeter_nodes();}
+
+    // now check the nodes around each perimeter nodes to see if it is adjacent to the other perimiter (diagonal excluded) and select it if not
+    for(int itb = 0; itb< int(budgerigar.size());itb++)
+    {
+      if(itb != basilisk)
+      {
+        temp_perimeter = budgerigar[itb].get_Perimeter_nodes();
+        if(temp_perimeter.size() == 1){budgerigar[itb].set_Perimeter(flowpy);temp_perimeter = budgerigar[itb].get_Perimeter_nodes();}
+        for(size_t flude = 0; flude<first_perimeter.size();flude++)
+        {
+          flowpy.retrieve_current_row_and_col(first_perimeter[flude], this_row, this_col);
+          if(this_row>0 && this_row<flowpy.get_NRows()-1 && this_col>0 && this_col<flowpy.get_NCols()-1)
+          {
+            tested_node = flowpy.retrieve_node_from_row_and_column(this_row,this_col+1);
+            if(find(temp_perimeter.begin(), temp_perimeter.end(), tested_node) != temp_perimeter.end()){adjacenty=true;}
+            tested_node = flowpy.retrieve_node_from_row_and_column(this_row,this_col-1);
+            if(find(temp_perimeter.begin(), temp_perimeter.end(), tested_node) != temp_perimeter.end()){adjacenty=true;}
+            tested_node = flowpy.retrieve_node_from_row_and_column(this_row+1,this_col);
+            if(find(temp_perimeter.begin(), temp_perimeter.end(), tested_node) != temp_perimeter.end()){adjacenty=true;}
+            tested_node = flowpy.retrieve_node_from_row_and_column(this_row-1,this_col);
+            if(find(temp_perimeter.begin(), temp_perimeter.end(), tested_node) != temp_perimeter.end()){adjacenty=true;}
+          }
+          
+          if(!adjacenty){out_perimeter.push_back(temp_perimeter[flude]);}
+          adjacenty = false;
+        }
+      }
+
+    }
+  }
+
+  return out_perimeter;
+}
+
+
+
+/// @brief detect the source nodes in a pixel window around a perimeter, for instance a basin  perimeter
+/// @detail It needs a sequence of nodes where it will loop around and gather all the source nodes encountered.
+/// @param vector of nodes, Flowinfo object and a JunctionNetwork object and a number of pixel for the window.
+/// @return vector of node indices of the new perimeter
+/// @author BG
+/// @date 10/10/17
+vector<int> LSDBasin::get_source_node_from_perimeter(vector<int> perimeter, LSDFlowInfo& flowpy, LSDJunctionNetwork& junky, int pixel_window)
+{
+
+  //First, creating a square-shaped mangoose vector (vector that host the pixel window parameter to loop through)
+  vector<int> mangoose;
+  mangoose.push_back(0);
+  for(size_t coati = 1; coati<size_t(pixel_window); coati++)
+  {  
+    mangoose.push_back(coati);
+    mangoose.push_back(-coati);
+  }
+  // mangoose is ready
+
+  //get all the sources
+  vector<int> all_sources = junky.get_SourcesVector();
+
+  // creating an empty output vector 
+  vector<int> selected_sources_nodes;
+
+  //creating the temp variables
+  int that_row = 0;
+  int that_col = 0;
+  int tested_node = 0;
+  
+  //loop through the perimeter and neighbooring nodes in the window
+  for(size_t coati = 0; coati<perimeter.size();coati++)
+  {
+    flowpy.retrieve_current_row_and_col(perimeter[coati],that_row,that_col);
+    for(size_t hogger =0; hogger<mangoose.size(); hogger++)
+    {
+      for(size_t hoggest =0; hoggest<mangoose.size(); hoggest++)
+      {
+        if((that_row + mangoose[hogger]>=0)&&(that_row + mangoose[hogger]< flowpy.get_NRows())&&(that_col+ mangoose[hoggest] >=0)&&(that_col+ mangoose[hoggest]<flowpy.get_NCols()))
+        {
+          tested_node = flowpy.retrieve_node_from_row_and_column(that_row+mangoose[hogger],that_col+mangoose[hoggest]);
+          if(find(all_sources.begin(), all_sources.end(), tested_node) != all_sources.end()){selected_sources_nodes.push_back(tested_node);}
+        }
+        
+
+      }
+    }
+  }
+
+  // now selecting the unique values
+
+  sort( selected_sources_nodes.begin(), selected_sources_nodes.end() );
+  selected_sources_nodes.erase( unique( selected_sources_nodes.begin(), selected_sources_nodes.end() ), selected_sources_nodes.end() ); 
+
+  // it should work
+  return selected_sources_nodes;
+} 
+
+
+
 
 
 
