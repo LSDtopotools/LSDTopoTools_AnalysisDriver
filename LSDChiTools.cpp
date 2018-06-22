@@ -249,6 +249,47 @@ void LSDChiTools::get_lat_and_long_locations(int row, int col, double& lat,
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 //
+// Function to convert a x/y position that is not necessarly a node into lat/long
+// and long coordinate
+//
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::get_lat_and_long_locations_from_coordinate(float X, float Y, double& lat,
+                   double& longitude, LSDCoordinateConverterLLandUTM Converter)
+{
+
+  // get the UTM zone of the node
+  int UTM_zone;
+  bool is_North;
+  get_UTM_information(UTM_zone, is_North);
+  //cout << endl << endl << "Line 1034, UTM zone is: " << UTM_zone << endl;
+
+
+  if(UTM_zone == NoDataValue)
+  {
+    lat = NoDataValue;
+    longitude = NoDataValue;
+  }
+  else
+  {
+    // set the default ellipsoid to WGS84
+    int eId = 22;
+
+    double xld = double(X);
+    double yld = double(Y);
+
+    // use the converter to convert to lat and long
+    double Lat,Long;
+    Converter.UTMtoLL(eId, yld, xld, UTM_zone, is_North, Lat, Long);
+
+
+    lat = Lat;
+    longitude = Long;
+  }
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+//
 // This function gets the UTM zone
 //
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -1518,7 +1559,9 @@ LSDIndexRaster LSDChiTools::segment_mapping(LSDFlowInfo& FlowInfo, float maximum
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 void LSDChiTools::segment_counter_knickpoint(LSDFlowInfo& FlowInfo, float threshold_knickpoint, float threshold_knickpoint_length)
 {
-  // these are for extracting element-wise data from the channel profiles.
+  cout << "Deprecated function, do not use it anymore. I am keeping it for a time just to check if someone still need it" << endl;
+  exit(EXIT_FAILURE);
+  /*// these are for extracting element-wise data from the channel profiles.
   //int abs_threshhold_knickpoint = abs (threshold_knickpoint);
   int this_node = 0;
   int segment_counter_knickpoint = 0; // count the number of knickpoints
@@ -1777,7 +1820,7 @@ void LSDChiTools::segment_counter_knickpoint(LSDFlowInfo& FlowInfo, float thresh
 
 
 
-    /*
+    
 
 
     if(false)
@@ -1923,7 +1966,7 @@ void LSDChiTools::segment_counter_knickpoint(LSDFlowInfo& FlowInfo, float thresh
         }
         else{still_processing = true;}
       }
-    }*/
+    }
   }
 
 
@@ -1932,110 +1975,1445 @@ void LSDChiTools::segment_counter_knickpoint(LSDFlowInfo& FlowInfo, float thresh
   segment_counter_knickpoint_map = this_segment_counter_knickpoint_map;
   segment_knickpoint_sign_map = this_segment_knickpoint_sign_map;
   segment_length_map = this_segment_length_map;
+  */
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::get_previous_mchi_for_all_sources(LSDFlowInfo& Flowinfo)
+{
+  // setting the variables for extracting the knickpoints
+  
+   // find the number of nodes
+  int n_nodes = (node_sequence.size());
+  if (n_nodes <= 0)
+  {
+    cout << "Cannot calculate segments since you have not calculated channel properties yet." << endl;
+    exit(EXIT_FAILURE);
+  }
+  else
+  {
+    int working_source = source_keys_map[node_sequence[0]]; // This is the working source key, the one you already have extracted the information
+    int current_source = source_keys_map[node_sequence[0]]; // this is the currently tested source_key that will become the working key is different than previous key
+    int starting_node_of_source_key = get_ending_node_of_source(Flowinfo ,working_source); // This store the starting node of the river with this source_key
+    
+    // Now getting the receiving node of the river with this source
+    int receiving_node_of_source_key, temp_row, temp_col;
+    Flowinfo.retrieve_receiver_information(starting_node_of_source_key, receiving_node_of_source_key, temp_row,temp_col);
+
+    //Finally getting the 
+    float m_chi_receiving_river = M_chi_data_map[receiving_node_of_source_key];
+    
+    // Creating temp data_map to save everything
+    map<int,int> this_map_source_key_receiver; // 
+    map<int,float> this_map_source_key_receiver_mchi;
+    this_map_source_key_receiver[working_source] = source_keys_map[receiving_node_of_source_key];
+    this_map_source_key_receiver_mchi[working_source] = m_chi_receiving_river;
+
+    // done initializing, let's do it for all the rivers
+
+    for (int n = 0; n< n_nodes; n++)
+    {
+      current_source = source_keys_map[node_sequence[n]];
+      //cout << source_keys_map[node_sequence[starting_node_of_source_key]] << "||" << node_sequence[source_keys_map[receiving_node_of_source_key]] << endl;
+      if(current_source != working_source && current_source != -9999)
+      {
+        // cout << "changing sources" << endl;
+        working_source = current_source;
+        starting_node_of_source_key = get_ending_node_of_source(Flowinfo, working_source);
+        Flowinfo.retrieve_receiver_information(starting_node_of_source_key, receiving_node_of_source_key, temp_row,temp_col);
+        m_chi_receiving_river = M_chi_data_map[receiving_node_of_source_key];
+        this_map_source_key_receiver[working_source] = source_keys_map[receiving_node_of_source_key];
+        this_map_source_key_receiver_mchi[working_source] = m_chi_receiving_river;
+      }  
+
+    }
+
+    // generalizing the maps
+    map_source_key_receiver = this_map_source_key_receiver;
+    map_source_key_receiver_mchi = this_map_source_key_receiver_mchi;
+
+
+  }
+
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+// Rather than recreating, changing and messing wiht knickpoints functions during developent,
+// Eveything will now be controlled from this function calling the adapted and up-to-date function
+// Leaving me time to develop what will be the final cleanest one and making easier the subdivision
+// in loads of little functions rather than one big script-like one. OBJECT ORIENTED POWER ˁ˚ᴥ˚ˀ
+// BG 
+void LSDChiTools::ksn_knickpoint_automator(LSDFlowInfo& FlowInfo, string OUT_DIR, string OUT_ID, float MZS_th, float lambda_TVD, float lambda_TVD_b_chi,int stepped_combining_window,int window_stepped, float n_std_dev, int kp_node_search)
+{
+
+  cout << "Getting ready for the knickpoint detection algorithm ...";
+  // The first preprocessing step is to preselect the river we want to process
+  // Potentially data selection function to be added here, exempli gratia lenght threshold for tributaries
+  // this first function fill a map[source key] = vector<node for this rive including the receiver node>
+  set_map_of_source_and_node(FlowInfo,5);
+
+  // Optional (?) lumping of the m_chi to get more deterministic segments
+  // I let that here but we gave up on this option, the signal is to smooth
+  // lump_my_ksn(5);
+
+  // We need to set the d(Segmented_elevation) to get the stepped knickpoints
+  derive_the_segmented_elevation();
+  cout << " OK" << endl ;
+
+  // We preprocessed the metrics we need, let's get into the Data!
+
+
+
+  cout << " Denoising the ksn or mchi and the differential segmenting elevation (Total Variation Denoising adapted from Condat, 2013) ..." << endl;
+  // Applying the Total_variation_denoising on m_chi.
+  // This is really efficient Algorithm, I am denoising the b_chi as well, for testing purposes
+  TVD_on_my_ksn(lambda_TVD, lambda_TVD_b_chi);
+  cout << " OK" << endl ;
+
+
+  cout << " Extracting general metrics for rivers ...";
+  // This will increment maps with source keys as key and various metrics such as river length, Chi lenght...
+  compute_basic_matrics_per_source_keys(FlowInfo);
+  cout << " OK" << endl ;
+
+
+
+  // main function that increment the map_of_knickpoints by detecting the changes in ksn within rivers
+  // /!\ Contain a cout statement
+  cout << "Detecting raw ksn knickpoints and stepped knickpoints for each source ...";
+  ksn_knickpoint_detection_new(FlowInfo);
+  cout << " OK" << endl;
+
+
+  // As proud as I was to have implement that, I unfortunately don't need it anymore...
+  // // Now dealing with outlier detection
+  // // first calculating the KDE
+  // cout << "Kernel Density Estimation per river (Deprecated, but I keep it for some debugging purposes) ...";
+  // ksn_kp_KDE();
+  // cout << " OK" << endl ;
+  // I just keep it for latter purposes, RIP AGU method.
+
+  // Processing the knickpoints to combine the composite knickpoints
+  cout << "Combining ksn knickpoints ..." << endl;
+  ksn_knickpoints_combining(FlowInfo,kp_node_search);
+  cout << " OK" << endl ;
+
+  cout << "Getting the stepped_knickpoints ..." << endl;
+  stepped_knickpoints_detection_v2(FlowInfo,window_stepped,n_std_dev);
+  // stepped_knickpoints_combining(FlowInfo, stepped_combining_window);
+  cout << " OK" << endl ;
+
+
+  // Ok let's detect oultliers here
+  cout << "Generating some stats ...";
+  ksn_knickpoint_outlier_automator(FlowInfo, MZS_th);
+  cout << " OK" << endl ;
+
+
+  //printing the raw ksn knickpoint file
+  string this_name = OUT_DIR + OUT_ID + "_ksnkp_raw.csv";
+  cout << "Printing data into csv files ...";
+  print_raw_ksn_knickpoint(FlowInfo, this_name);
+  this_name = OUT_DIR + OUT_ID + "_ksnkp_SK.csv";
+  print_bandwidth_ksn_knickpoint(this_name);
+  this_name = OUT_DIR + OUT_ID + "_ksnkp_mchi.csv";
+  print_mchisegmented_knickpoint_version(FlowInfo, this_name);
+  this_name = OUT_DIR + OUT_ID + "_ksnkp.csv";
+  print_final_ksn_knickpoint(FlowInfo, this_name);
+  cout << " OK" << endl ;
+
+
+
+}
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // New function for the knickpoint detection
 // save the difference and ratio between m_chi values of each segments
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-void LSDChiTools::ksn_knickpoint_detection(LSDFlowInfo& FlowInfo)
+void LSDChiTools::ksn_knickpoint_detection_new(LSDFlowInfo& FlowInfo)
 {
-  // these are for extracting element-wise data from the channel profiles.
-  //int abs_threshhold_knickpoint = abs (threshold_knickpoint);
-  int this_node = 0;
-  map<int,float> this_kickpoint_diff_map;
-  map<int,float> this_kickpoint_ratio_map;
-  map<int,int> this_knickpoint_sign_map;
-  float last_M_chi, this_M_chi;
-  float delta_mchi = 0; // difference between last and new m_chi
-  float ratio_mchi = 0; // ratio between last and new m_chi
-  int knickpoint_sign = 0; // sign of the knickpoint: + =1 and - = -1
-  int last_node = 0;
-  int number_of_0 = 0;
-  int n_knp = 0;
 
+  // preparing the needed iterators
+  map<int,vector<int> >::iterator SK;
+  // Initializing some variables
+  int this_SK;
+  vector<int> vecnode;
 
-
-
-  // find the number of nodes
-  int n_nodes = (node_sequence.size());
-  if (n_nodes <= 0)
+  // Looping through all the sources key
+  for(SK = map_node_source_key.begin(); SK != map_node_source_key.end(); SK++)
   {
-    cout << "Cannot calculate segments since you have not calculated channel properties yet." << endl;
+    this_SK = SK->first;
+    vecnode = SK->second; // getting the vector of river node to check
+    ksn_knickpoint_raw_river(this_SK,vecnode);
   }
-  else
+
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Detect the knickpoint in one river and increment the global map
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::ksn_knickpoint_raw_river(int SK, vector<int> vecnode)
+{
+  // Setting the iterator(s)
+  vector<int>::iterator node = vecnode.begin(); // first node of the river -> the source
+
+  // Setting function variables
+  int last_node = *node; // last node is the first node
+  node++; // switching to the second node
+  int this_node = *node; // this node is the second one 
+  // vector that will contain the nodes having a knickpoint
+  vector<int> vecdif;
+  // Bunch of floats
+  //float dkdc = 0;     // Don't seem to need these (SMM)
+  //float dchi = 0;     // Don't seem to need these (SMM)
+  float dksn = 0;
+  float this_ksn = TVD_m_chi_map[this_node];
+  float last_ksn = TVD_m_chi_map[last_node]; // Setting last and this ksn
+
+  // Looping through the nodes from the second one
+  for( ; node != vecnode.end(); node++) // the first ";" is normal: it states that I have no initial conditions 
   {
-    this_node = node_sequence[0];
-    last_M_chi =  M_chi_data_map[this_node];
-
-    for (int n = 0; n< n_nodes; n++)
+    // initializing the variables for this run
+    this_node = *node;
+    this_ksn = TVD_m_chi_map[this_node];
+    // dsegelev = segelev_diff[this_node];
+    // if ksn has change, Implementing a raw knickpoint, quantifying it with delta ksn
+    if((this_ksn != last_ksn) && this_ksn != -9999 && last_ksn != -9999 )
     {
+      // deta ksn from bottom to top
+      dksn = last_ksn - this_ksn;
+      // saving the value in the global raw_ksn_kp map
+      raw_ksn_kp_map[this_node] =  dksn;
+      // saving the node to get the vector of ksn knickpoints per source, for later grouping purpose for example
+      vecdif.push_back(this_node);
+    }
+    // setting the next last variables
+    last_node = this_node;
+    last_ksn = this_ksn;
 
-      // set the nodes number and keep information about the previous one
-      if(n>0)
+  }
+
+  // implementing the global map
+  map_node_source_key_kp[SK] = vecdif;
+
+}
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Detection of stepped kncikpoints - NEW
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::stepped_knickpoints_detection_v2(LSDFlowInfo& Flowinfo, int window, float n_std_dev)
+{
+    // preparing the needed iterators
+  map<int,vector<int> >::iterator SK;
+  // Initializing some variables
+  // int this_SK;             // This doens't seem to be used (SMM)
+  vector<int> vecnode;
+  int HW = int(window/2);
+
+  // Looping through all the sources key
+  for(SK = map_node_source_key.begin(); SK != map_node_source_key.end(); SK++)
+  {
+    
+    // the source key
+    //this_SK = SK->first;       // This doens't seem to be used (SMM)
+    
+    // the vector containing the river nodes
+    vecnode = SK->second;
+    // first check if the size is over the window
+    if(int(vecnode.size()) > window)
+    { 
+      // first step is to get the windowed stats, the moving window will gather informations across the vector of nodes 
+      map<string,vector<float> > these_stats = get_windowed_stats_for_knickpoints(vecnode,HW);
+
+      for(size_t it = 0; it< vecnode.size(); it++)
       {
-        last_node = this_node;
+        int this_node = vecnode[it];
+        float this_std = these_stats["std_dev"][it], this_mean = these_stats["mean"][it];
+        mean_for_kp[this_node] = this_mean;
+        std_for_kp[this_node] = this_std;
+
+        if(segelev_diff[this_node] >= (n_std_dev * this_std))
+        {
+          kp_segdrop[this_node] = segelev_diff[this_node];
+        }
       }
-      this_node = node_sequence[n];
-      // Get the M_chi from the current node
-      this_M_chi = M_chi_data_map[this_node];
-
-      if(this_M_chi < 0 && n>0){this_M_chi = 0;} // getting rid of the negative values because we don't want it, I don't want the n = 0 to avoid detecting fake knickpoint if the first value is actually negative
-      
-      // DEBUG STATEMENT - PLEASE KEEP I USE THIS SOMETIMES
-
-      // cout << "RIVER SOURCE: " << source_keys_map[this_node] << " LAST: " << source_keys_map[last_node] << endl;
-      // cout << "MCHI: " << M_chi_data_map[this_node] << " LAST: " << M_chi_data_map[last_node] << endl;
-      // cout << "MCHI2: " << this_M_chi << " LAST: " << last_M_chi << endl;
+    }
+  }
+}
 
 
-      // If the M_chi has changed I increment the knickpoints, I also check if the two point are on the same channel to avoid stange unrelated knickpoints
-      if (this_M_chi != last_M_chi && source_keys_map[this_node] == source_keys_map[last_node])
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Apply a moving window on the river nodes to get the mean and std-dev on each nodes
+// HW is the HalfWidth
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+map<string,vector<float> > LSDChiTools::get_windowed_stats_for_knickpoints(vector<int> vecnode,int HW)
+{
+  // first get the general vector of value
+  vector<float> vecval, window_vecval_mean, window_vecval_std;
+  int window = HW*2;
+
+  // looping through the node of the river and getting the corresponding delta segmented elevation
+  for(vector<int>::iterator it = vecnode.begin(); it != vecnode.end(); it ++)
+  {
+    int this_node = *it;
+    if(chi_data_map[this_node] != -9999){
+      vecval.push_back(segelev_diff[this_node]);
+    }
+  }
+  // Vecval is now implemented with the values
+
+  // Now moving window along the delta segelev profile
+  for(size_t it = 0;it<vecnode.size(); it++)
+  {
+    // we are in the first nodes boundary: we cannot loop before so the same value will be applied everywhere in this case
+    if(int(it)<HW)
+    {
+      vector<float> this_vecval;
+      // getting the value for the window
+      for(int o = 0; o < window ; o++ )
       {
-        //cout << "THIS LAST SAVED" << endl << endl << endl;
-        if(this_M_chi == 0)
-        {
-          ratio_mchi = -9999; // correspond to +infinite
-          number_of_0++;
-        }
-        else
-        {
-          ratio_mchi = last_M_chi/this_M_chi; // Ratio between last and new chi steepness
-        }
-        delta_mchi = last_M_chi-this_M_chi; // diff between last and new chi steepness
-        if(delta_mchi<=0){knickpoint_sign = -1;} else {knickpoint_sign = 1;} // Assign the knickpoint sign value
-        delta_mchi = abs(delta_mchi); // we want the absolute mangitude of this, the sign being displayed in another column. it is just like nicer like this.
-        // Allocate the values to local maps
-        this_kickpoint_diff_map[this_node] = delta_mchi;
-        this_kickpoint_ratio_map[this_node] = ratio_mchi;
-        this_knickpoint_sign_map[this_node] = knickpoint_sign;
-        n_knp ++;
-
-        // reinitialise the parameters for next loop turn
-        
+        this_vecval.push_back(vecval[o]);
       }
-    last_M_chi = this_M_chi;
+      // getting the stats
+      float this_mean = get_mean(this_vecval);
+      // implemeting
+      window_vecval_mean.push_back(this_mean);
+      float this_std = get_standard_deviation(this_vecval,this_mean);
+      window_vecval_std.push_back(this_std);
+
+      this_vecval.clear();    
+    }
+    // we are in the middle of the river nodes
+    else if (it < (vecnode.size()-HW))
+    {
+      vector<float> this_vecval;
+      for(size_t o = it; o < (it+window) ; o++ )
+      {
+        this_vecval.push_back(vecval[o]);
+      }
+      float this_mean =get_mean(this_vecval);
+      window_vecval_mean.push_back(this_mean);
+      float this_std = get_standard_deviation(this_vecval,this_mean);
+      window_vecval_std.push_back(this_std);
+
+      this_vecval.clear();    
+    }
+    //we are in the last part
+    else if (it >= (vecnode.size()-HW))
+    {
+      vector<float> this_vecval;
+      for(size_t o = (vecnode.size()-window); o < (vecnode.size()) ; o++ )
+      {
+        this_vecval.push_back(vecval[o]);
+      }
+      float this_mean = get_mean(this_vecval);
+      window_vecval_mean.push_back(this_mean);
+      float this_std = get_standard_deviation(this_vecval,this_mean);
+      window_vecval_std.push_back(this_std);
+
+      this_vecval.clear();    
     }
 
   }
-  // print everything in the public/protected maps
-  kns_ratio_knickpoint_map = this_kickpoint_ratio_map;
-  kns_diff_knickpoint_map = this_kickpoint_diff_map;
-  ksn_sign_knickpoint_map = this_knickpoint_sign_map;
-  cout << "I finished to detect the knickpoints, you have " << n_knp << " knickpoints, thus " << number_of_0 << " ratios are switched to -9999 due to 0 divisions." << endl;
+
+  // generating the outputs
+  map<string,vector<float> > map_of_stats;
+  map_of_stats["mean"] = window_vecval_mean;
+  map_of_stats["std_dev"] = window_vecval_std;
+
+  return map_of_stats;
 }
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-// Print data maps to file - knickpoint version
+// Detection of stepped kncikpoints - old version
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-void LSDChiTools::print_knickpoint_to_csv(LSDFlowInfo& FlowInfo, string filename)
+void LSDChiTools::raw_stepped_knickpoint_detection(int SK, vector<int> vecnode)
+{
+  // Setting the iterator(s)
+  vector<int>::iterator node = vecnode.begin(); // first node of the river -> the source
+
+  // Setting function variables
+  int last_node = *node; // last node is the first node
+  node++; // switching to the second node
+  int this_node = *node; // this node is the second one 
+  // vector that will contain the nodes having a knickpoint
+  vector<int> vecdif;
+  // Bunch of floats
+  float this_TVD_b_chi = TVD_b_chi_map[this_node], last_TVD_b_chi = TVD_b_chi_map[last_node]; // Setting last and this segmented elevation change
+
+  // Looping through the nodes from the second one
+  for( ; node != vecnode.end(); node++) // the first ";" is normal: it states that I have no initial conditions 
+  {
+    // initializing the variables for this run
+    this_node = *node;
+    this_TVD_b_chi = TVD_b_chi_map[this_node];
+   
+    // if b_chi has change, Implementing a raw knickpoint and calculating the d|ksn|/dchi
+    if(this_TVD_b_chi != last_TVD_b_chi || TVD_m_chi_map[last_node] != TVD_m_chi_map[this_node])
+    {
+      raw_delta_segelev_from_TVDb_chi[this_node] = segelev_diff[this_node]; 
+      // testing something here
+      // float this_segdiff = (TVD_m_chi_map[last_node] * chi_data_map[last_node] + TVD_b_chi_map[last_node]) - (TVD_m_chi_map[this_node] * chi_data_map[this_node] + TVD_b_chi_map[this_node]);
+      // raw_delta_segelev_from_TVDb_chi[this_node] = this_segdiff;
+      vecdif.push_back(this_node);
+    }
+    // setting the next last variables
+    last_node = this_node;
+    last_TVD_b_chi = this_TVD_b_chi;
+  }
+
+  // implementing the global map
+  map_node_source_key_kp_stepped[SK] = vecdif;
+}
+
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  Group the adjacent local knickpoints                  =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+void LSDChiTools::ksn_knickpoints_combining(LSDFlowInfo& Flowinfo, int kp_node_search)
+{
+  // this function will combine the composite knickpoints
+
+  // First looping through the source keys
+  map<int,vector<int> >::iterator henri;
+  // saaving an ID for each knickpoints
+  id_kp = 0;
+
+  for(henri = map_node_source_key_kp.begin(); henri != map_node_source_key_kp.end(); henri ++)
+  {
+    // Now looping through the node for each rivers
+    int this_SK = henri -> first;
+    // Getting the vector of node per river AND vector of ksn knickpoints nodes per river
+    vector<int> vecnode_kp = henri->second, vecnode_river = map_node_source_key[this_SK];
+    if(vecnode_kp.size()>0)
+    {
+      // getting the groups of vector depending on your combination window
+      vector<vector<int> > grouped_kp = group_local_kp(vecnode_kp,vecnode_river,Flowinfo, kp_node_search);
+
+      // We have the group of vector now lets run through it to get the requested values
+      for(vector<vector<int> >::iterator vlad = grouped_kp.begin(); vlad != grouped_kp.end(); vlad ++)
+      {
+        // Investigating the first node
+        vector<int> this_vecnode = *vlad;
+
+        // Easy case: non composite knickpoint, let's just record the same info thatn the raw detection
+        if(this_vecnode.size() == 1)
+        {
+          int this_node = this_vecnode[0];// node of the knickpoint
+          ksn_kp_map[this_node] = raw_ksn_kp_map[this_node]; // delta ksn of the knickpoint
+          sharpness_ksn_length[this_node] = 0; // sharpness = 0 as the knickpoint is a point
+          ksn_extent[this_node] = make_pair(this_node, this_node); // the "extent" nodes are the same
+
+          // Getting the coordinate of the centroid of the kp -> just regular x
+          float this_x = 0,this_y = 0;
+          Flowinfo.get_x_and_y_from_current_node(this_node, this_x, this_y);
+          ksn_centroid[this_node] = make_pair(this_x,this_y); // centroid does not move as well
+
+          // finally getting the ID of my kp and its location (It is not relevant in this case, but we need to implement the maps)
+          ksn_kp_ID[this_node] = id_kp;
+          nearest_node_centroid_kp[this_node] = this_node;
+          flow_distance_kp_centroid_map[this_node] = flow_distance_data_map[this_node];
+          id_kp ++;
+        }
+
+        else if(this_vecnode.size() > 1)
+        {
+          // harder case: several knickpoints, let's go step by step
+          // the identifying node of the kp is the first one
+          int this_node = this_vecnode[0];
+          
+          // summing the segelev and dksn for this group of node
+          ksn_kp_map[this_node] = get_dksn_from_composite_kp(this_vecnode); // gobal ksn value of the knickpoint, simple sum
+
+          // Sharpness is the width of the combined knickpoints
+          sharpness_ksn_length[this_node] = get_kp_sharpness_length(this_vecnode, Flowinfo);
+          ksn_extent[this_node] = make_pair(this_vecnode[0], this_vecnode.back()); // the extent nodes are the extreme of the grouping vector
+
+
+          // The neirest node from the centre of the knickpoint (in regards to chi distance)
+          int nearnode = get_ksn_centroid_coordinates(Flowinfo, this_vecnode, vecnode_river,ksn_kp_map[this_node]); // get the weighted x and y of the centroid.
+
+          flow_distance_kp_centroid_map[this_node] = flow_distance_data_map[nearnode];
+          // getting the Flow dist at the weighted distance
+          float this_x = 0,this_y = 0;
+          Flowinfo.get_x_and_y_from_current_node(nearnode, this_x, this_y);
+          // implementing the global maps
+          ksn_centroid[this_node] = make_pair(this_x,this_y);
+          nearest_node_centroid_kp[this_node] = nearnode;
+          ksn_kp_ID[this_node] = id_kp;
+          id_kp++;
+        }
+      }
+    }
+
+  }
+
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  get the delta ksn value for a composite knickpoint    =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+float LSDChiTools::get_dksn_from_composite_kp(vector<int> vecnode)
 {
 
+  float out_value = 0;
+  for(vector<int>::iterator bob = vecnode.begin(); bob!= vecnode.end(); bob++)
+  {
+    int this_node = *bob;
+    out_value += raw_ksn_kp_map[this_node];
+  }
+
+  return out_value;
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  get the delta segelev value for a composite knickpoint - OLD    =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+float LSDChiTools::get_dseg_drop_from_composite_kp(vector<int> vecnode)
+{
+  // I'll get the segelev augmentation NORMALIZED by the chi distance
+  // I have to find a way to normalize
+  float out_value = 0; //, chi_min = 0, chi_max =0;
+  for(vector<int>::iterator bob = vecnode.begin(); bob!= vecnode.end(); bob++)
+  {
+    int this_node = *bob;
+    out_value += raw_delta_segelev_from_TVDb_chi[this_node];
+  }
+
+  return out_value;
+}
+
+float LSDChiTools::get_kp_sharpness_length(vector<int> vecnode, LSDFlowInfo& Flowinfo)
+{
+  float total_distance = 0;
+  int last_node = vecnode[0];
+
+  for(vector<int>::iterator gog = vecnode.begin(); gog!= vecnode.end(); gog++)
+  {
+    int this_node = *gog;
+    total_distance += abs(flow_distance_data_map[last_node] - flow_distance_data_map[this_node]);
+  }
+
+  return total_distance;
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  get the centroid node of grouped knickpoints          =
+//                  Current version                       =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+int LSDChiTools::get_ksn_centroid_coordinates(LSDFlowInfo& Flowinfo, vector<int> vecnode,vector<int> vecnode_river, float total_dksn)
+{
+
+  pair<float,float> out_pair; // x,y coordinates
+
+  vector<int> this_vecnode_river = get_vecnode_river_from_extent(vecnode[0], vecnode.back(), vecnode_river);
+
+  // first, let's get the chi, the dksn and the weighted distance of each nodes
+  vector<float> chi_vec , dksn_vec;
+  
+  // looping through each nodes to group, and getting the info in the same order that the original vector of nodes
+  for(size_t iter = 0; iter < this_vecnode_river.size(); iter++)
+  {
+    chi_vec.push_back(chi_data_map[this_vecnode_river[iter]]);
+    if (raw_ksn_kp_map.count(this_vecnode_river[iter]) != 0)
+    {
+      dksn_vec.push_back(abs(raw_ksn_kp_map[this_vecnode_river[iter]])); // I am using the raw map, that host the values before combining
+    }
+    else
+    {
+      dksn_vec.push_back(0);
+    }
+  }
+
+
+  // Applying a barycenter-like centering of the data to get the chi barycentre
+  float M = total_dksn, chi_center = 0, sum_of_mi_ri = 0;
+  // Summing the weighted chi distance by dksn
+
+  for(size_t iter = 0; iter < this_vecnode_river.size(); iter++)
+  {
+    float mi = dksn_vec[iter], ri = chi_vec[iter];
+    sum_of_mi_ri += mi*ri;
+    // cout << sum_of_mi_ri << " || " << ri << " || " << mi <<  " || " << M << endl;
+  }
+
+  // applying the weight
+  chi_center = abs(sum_of_mi_ri/M);
+  // cout << chi_center << endl;
+
+  // *cymbal and trumbet noise* we have our chi center
+
+  // then looping from bottom to top of nodes to get the boundary nodes of this last
+  bool found_it = false;
+  int ninf = 0, nsup = 0, this_node = 0, last_node = 0 ;
+  for(vector<int>::iterator hibou = this_vecnode_river.begin(); found_it == false; hibou ++)
+  {
+    this_node = *hibou;
+    // cout << this_node << " || " << this_vecnode_river.back() << endl ;
+    if((chi_data_map[this_node] > chi_center )|| ( this_node == this_vecnode_river.back()))
+    {
+      found_it = true;
+      ninf = last_node;
+      nsup = this_node;
+    }
+    last_node = this_node;
+  }
+
+  // now getting the distance between nodes
+  int centre_node = 0;
+
+  float up_chi_diff = abs(chi_data_map[nsup] - chi_center);
+  float down_chi_diff = abs(chi_data_map[ninf] - chi_center);
+
+  if(up_chi_diff<=down_chi_diff)
+  {
+    centre_node = nsup;
+  }
+  else
+  {
+    centre_node = ninf;
+  }
+
+  return centre_node;
+
+}
+
+
+vector<int> LSDChiTools::get_vecnode_river_from_extent(int first_node, int last_node, vector<int> vecnode_river)
+{
+
+  // first_node is bottom node and last node is the upper node inb term of elevation
+        // cout << endl << elev_data_map[vecnode_river[0]] << " || " << elev_data_map[vecnode_river.back()] << endl;
+        // cout <<  elev_data_map[first_node] << " || " << elev_data_map[last_node] << endl;
+
+
+        // exit(EXIT_FAILURE);
+
+  vector<int> out_node;
+  bool pushit = false;
+
+  // looping through the river nodes
+  for(vector<int>::iterator uter = vecnode_river.begin(); uter != vecnode_river.end(); uter++)
+  {
+    int this_node = *uter;
+    // Checking if I need to begin the push-in
+    if(this_node == first_node){pushit  = true;}
+    // push when relevant
+    if(pushit){out_node.push_back(this_node);}
+    // Checking if I need to stop pushing
+    if(this_node == last_node){pushit = false;}
+  }
+  // cout << endl << out_node.size() << endl;
+
+
+  return out_node;
+
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  This method combine the main stepped variation        =
+//                  Old version                           =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+void LSDChiTools::stepped_knickpoints_combining(LSDFlowInfo& Flowinfo, int kp_node_search)
+{
+
+// this function will combine the composite knickpoints
+
+  // First looping through the source keys
+  map<int,vector<int> >::iterator henri;
+
+  for(henri = map_node_source_key_kp_stepped.begin(); henri != map_node_source_key_kp_stepped.end(); henri ++)
+  {
+    // Now looping through the node for each rivers
+    int this_SK = henri -> first;
+    vector<int> vecnode_kp = henri->second, vecnode_river = map_node_source_key[this_SK];
+    // cout << this_SK << endl;
+    if(vecnode_kp.size()>0)
+    {
+      // getting the groups of vector, each vector contains the knickpoints nodes to group
+      vector<vector<int> > grouped_kp = group_local_kp(vecnode_kp,vecnode_river,Flowinfo, kp_node_search);
+      // We have the group of vector now lets run through it to get the requested values
+      for(vector<vector<int> >::iterator vlad = grouped_kp.begin(); vlad != grouped_kp.end(); vlad ++)
+      {
+        // getting the vector of node we need: the nodes containing 
+        vector<int> this_vecnode = *vlad;
+        // Easy case: non composite knickpoint, let's just record the same info thatn the raw detection
+        if(this_vecnode.size() == 1)
+        {
+          int this_node = this_vecnode[0];// node of the knickpoint
+          kp_segdrop[this_node] = raw_delta_segelev_from_TVDb_chi[this_node];
+          sharpness_stepped_length[this_node] = 0; // sharpness = 0 as the knickpoint is a point
+          stepped_extent[this_node] = make_pair(this_node, this_node); // the extent nodes are the same
+          // Getting the coordinate of the centroid of the kp -> just regular x
+          float this_x = 0,this_y = 0;
+          Flowinfo.get_x_and_y_from_current_node(this_node, this_x, this_y);
+          stepped_centroid[this_node] = make_pair(this_x,this_y);
+          
+          nearest_node_centroid_kp_stepped[this_node] = this_node;
+          flow_distance_stepped_kp_centroid_map[this_node] = flow_distance_data_map[this_node];
+        }
+        else if(this_vecnode.size() > 1)
+        {
+          // Second case: several knickpoints to group, let's go step by step
+          // the identifying node of the kp is the first one
+          int this_node = this_vecnode[0];
+          
+          // summing the segelev for this group of node
+          kp_segdrop[this_node] = get_dseg_drop_from_composite_kp(this_vecnode); // gobal segmentation elevation value of the knickpoint
+
+          
+          // Sharpness is the width of the combined knickpoints
+          sharpness_stepped_length[this_node] = get_kp_sharpness_length(this_vecnode, Flowinfo);
+          stepped_extent[this_node] = make_pair(this_vecnode[0], this_vecnode.back()); // the extent nodes are the extreme of the DD
+
+
+          // The neirest node from the centre of the knickpoint (in regards to chi distance)
+          
+          // TO SORT, NOT ADAPTED TO THAT  -> TODO NEXT WEEK BORIS
+          int nearnode = get_ksn_centroid_coordinates(Flowinfo, this_vecnode, vecnode_river,kp_segdrop[this_node]); // get the weighted x and y of the centroid.
+
+          flow_distance_stepped_kp_centroid_map[this_node] = flow_distance_data_map[nearnode];
+          // getting the 
+          float this_x = 0,this_y = 0;
+          Flowinfo.get_x_and_y_from_current_node(nearnode, this_x, this_y);
+
+          stepped_centroid[this_node] = make_pair(this_x,this_y);
+          nearest_node_centroid_kp_stepped[this_node] = nearnode;
+
+
+
+        }
+      }
+    }
+  }
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  Group the adjacent local knickpoints from two vectors =
+//                  Old version                           =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+vector<vector<int> > LSDChiTools::old_group_local_kp(vector<int> vecnode_kp, vector<int> vecnode_river,LSDFlowInfo& Flowinfo)
+{
+  // creating a map of neightboors for each nodes of the river 
+  size_t it;
+  map<int,pair<int,int> > neightboors;
+  for(it = 0; it< vecnode_river.size(); it ++)
+  {
+    int this_node = vecnode_river[it];
+    pair<int,int> this_pair;
+    if(it == 0)
+    {
+      this_pair = make_pair(-9999, vecnode_river[it+1]);
+    }
+    else if(it == (vecnode_river.size() - 1))
+    {
+      this_pair = make_pair(vecnode_river[it-1],-9999);
+    }
+    else
+    {
+      this_pair = make_pair(vecnode_river[it-1],vecnode_river[it+1]);
+    }
+    neightboors[this_node] = this_pair;
+  }
+  // Done
+
+  // Now looping through each nodes containing knickpoints to check if they have a direct neighboor
+  vector<vector<int> > out_vector;
+  vector<int> this_vecnode;
+  if(vecnode_kp.size()>0)
+  {
+    // cout << "DEBUG test 1" << endl;
+    // dealing with the first node
+    this_vecnode.push_back(vecnode_kp[0]);
+    if(vecnode_kp[0] != neightboors[0].second )
+    {
+      out_vector.push_back(this_vecnode);
+      this_vecnode.clear();
+    }
+    // cout << "DEBUG test 2" << endl;
+
+    // other nodes
+
+    for(it = 1; it < vecnode_kp.size(); it++)
+    {
+      // which one is our working node
+      int this_node = vecnode_kp[it], next_node = vecnode_kp[it+1], last_node = vecnode_kp[it-1] ;
+      this_vecnode.push_back(this_node);
+      if(it < (vecnode_kp.size()-1))
+      {
+        if( next_node != neightboors[this_node].second && last_node != neightboors[this_node].first)
+        {
+          out_vector.push_back(this_vecnode);
+          this_vecnode.clear();
+        }   
+      }
+      else 
+      {
+        out_vector.push_back(this_vecnode);
+        this_vecnode.clear();
+      }
+    }
+
+    // cout << "DEBUG test 3" << endl;
+
+  }
+
+  return out_vector;
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  Group the adjacent local knickpoints from two vectors =
+//                  New version                           =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+vector<vector<int> > LSDChiTools::group_local_kp(vector<int> vecnode_kp, vector<int> vecnode_river, LSDFlowInfo& Flowinfo, int kp_node_search)
+{
+
+  // pixel window to check on the knickpoints
+  int HW = kp_node_search;
+  // cout << "DEBUG_1" << endl;
+  // getting the index of each knickpoint in the node vector
+  size_t iced_t =0;
+  vector<int> corresponding_index;
+  for(; iced_t < vecnode_kp.size(); iced_t++)
+  {
+    int idx =0;
+    bool found_it = false;
+    for (size_t yh =0; found_it == false; yh++)
+    {
+      if(vecnode_kp[iced_t] == vecnode_river[yh])
+      {
+        idx = yh; // corresponding index
+        found_it = true;
+      }
+    }
+    corresponding_index.push_back(idx);
+  }
+
+
+  // Now I have the corresponding index
+  // cout << "DEBUG_2 || " << corresponding_index.back() << endl;
+
+  // Now creating a vector of number of node between this kp node and the following
+  vector<int> n_node_to_next;
+
+  for(size_t it = 0; it < corresponding_index.size()-1; it++)
+  {
+    n_node_to_next.push_back(corresponding_index[it+1] - corresponding_index[it]);
+  }
+  n_node_to_next.push_back(0);
+
+  // cout << (int)vecnode_river.size() << " || " << (int)n_node_to_next.size() << " || " << (int)corresponding_index.size() << " || " << (int)vecnode_kp.size() << endl;
+
+  // I got the number of node in between a knickpoint and the next
+  // cout << "DEBUG_3" << endl;
+
+  vector<vector<int> > out_vector;
+  vector<int> this_vec;
+  int counting_these_fucking_knickpoints = 0;
+
+  for(size_t it = 0; it < vecnode_kp.size(); it++)
+  {
+
+    // saving the node
+    bool save_the_raster = true;
+    // cout << "DEBUG_3.1" << endl;
+    int this_idx = corresponding_index[it];
+    // cout << "DEBUG_3.2" << endl;
+    this_vec.push_back(vecnode_kp[it]);
+    counting_these_fucking_knickpoints++;
+    // cout << "THIS KP NODE = " << vecnode_kp[it] << endl;
+
+    if(n_node_to_next[it] <= HW)
+    {
+      // cout << "DEBUG_3.3" << endl;
+      // cout << this_idx << " || " << n_node_to_next[it] << " || " << vecnode_river.size()-1 << endl;
+
+      if((this_idx+n_node_to_next[it])> int(vecnode_river.size()-1))
+      {
+        cout << "GP_KP::FATAL ERROR, This is a weird error, try to rerun the analysis, if it persists contact B.G." << endl;
+        exit(EXIT_FAILURE);
+      }
+
+      if((this_idx < int(vecnode_river.size()-1)) && (this_idx+n_node_to_next[it]<(int(vecnode_river.size()-1))) && it != vecnode_kp.size()-1)
+      {
+        // cout << n_node_to_next[it] << endl;
+        // cout << "DEBUG_4" << endl;
+        float this_kp = raw_ksn_kp_map[vecnode_river[this_idx]], next_kp = raw_ksn_kp_map[vecnode_river[this_idx+n_node_to_next[it]]] ;
+        // cout << "DEBUG_5" << endl;
+        // Check if they are both the same polarity
+        // cout << this_idx << " || " << n_node_to_next[it] << " || " << vecnode_river.size()-1 << endl;
+        if( (this_kp > 0 && next_kp > 0) || (this_kp <0 && next_kp<0) )
+
+        {
+          // cout << "DEBUG_5.5" << endl;
+          save_the_raster = false;
+        }
+      }
+    }
+    // if not of these, I am saving this vector of node and clearing it
+    if(save_the_raster == true)
+    {
+      // this should not happen, it helps me to debug
+      if(this_vec.size() == 0)
+      {
+        cout <<"FATAL ERROR: void vector while combining (ERROR #45)" << endl;
+        exit(EXIT_FAILURE);
+      }
+      out_vector.push_back(this_vec);
+      this_vec.clear();
+    }
+  }
+
+  // DEBUGGING to keep
+  // int sumdfsdfa = 0;
+  // for(vector<vector<int> >::iterator vlad = out_vector.begin(); vlad != out_vector.end(); vlad ++)
+  // {
+  //   vector<int> gyuyg = *vlad;
+  //   sumdfsdfa += gyuyg.size();
+  // }
+  // cout<< "out: " << sumdfsdfa << " || in: " << vecnode_kp.size() << " || in_2: " << counting_these_fucking_knickpoints  << endl;  
+  return out_vector;
+
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  Apply a Total Variation Denoising filter on the data  =
+//    Coded in LSDStatTools adapted from Condat L.2013    =
+//            DOI: 10.1109/LSP.2013.2278339               =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+void  LSDChiTools::TVD_on_my_ksn( float lambda, float lambda_TVD_b_chi)
+{
+  // Set the variables
+  map<int,vector<int> >::iterator chirac;
+  vector<int> this_vec;
+  // int max_node = 500;
+  // Looping through the source key and getting the associated vector of river nodes
+  for(chirac = map_node_source_key.begin(); chirac != map_node_source_key.end() ; chirac ++)
+  {
+    // int this_SK = chirac->first; // we don't need it, but maybe at some points
+    this_vec = chirac->second; // the vector of node
+    vector<float> gros_test; // Debugging purposes
+    // this next function Apply the TVD on the vector. It directly save the results in a global map and return general informations for debugging
+    if(this_vec.size()>20){
+      gros_test = TVD_this_vec(this_vec, lambda, lambda_TVD_b_chi);
+    }
+
+
+    // I am planning a test -> TO KEEP it would be an improvment of the denoising
+    // if(int(this_vec.size()) <= max_node)
+    // {
+    
+    //   gros_test = TVD_this_vec(this_vec, lambda, lambda_TVD_b_chi);
+
+    // }
+    // else
+    // {
+    //   //testing here a TVD improvement 
+    //   int n_nodes_processed = 0, threshold_node_to_end = this_vec.size()-int(0.4*max_node);
+    //   vector<float> intermediate_values;
+    //   // Setting the first vector and the last one
+    //   vector<int>::const_iterator first = this_vec.begin() + max_node, last = this_vec.end() - max_node, begin = this_vec.begin(),ending = this_vec.end();
+      
+    //   vector<int> first_vec(begin, first), last_vec(last,ending);
+
+
+    //   // processing to a first TVD
+    //   while(n_nodes_processed<this_vec.size())
+    //   {
+    //     if(n_nodes_processed == 0)
+    //     {
+    //       TVD_this_vec_v2(first_vec, lambda, lambda_TVD_b_chi, max_node, "begin");
+    //     }
+    //     else if(n_nodes_processed < (threshold_node_to_end))
+    //     {
+    //       int slider = (n_nodes_processed - int(( 0.2 * n_nodes_processed)));
+    //       vector<int>::const_iterator beg = this_vec.begin() + slider;
+    //       slider += max_node ;
+    //       vector<int>::const_iterator  end = this_vec.begin() + slider;
+    //       vector<int> interm_vec(beg,end);
+    //       TVD_this_vec_v2(interm_vec, lambda, lambda_TVD_b_chi, max_node, "middle");
+    //     }
+    //     else if(n_nodes_processed >= (threshold_node_to_end))
+    //     {
+    //       TVD_this_vec_v2(last_vec, lambda, lambda_TVD_b_chi, max_node, "end");
+
+    //     }
+    //     else
+    //     {
+    //       cout << "Something went wrong during the TVD segmentation, I am aborting. Contact Boris if this happens to you twice on a row" << endl;
+    //       exit(EXIT_FAILURE);
+    //     }
+
+    //     n_nodes_processed += 0.6 * max_node;
+
+    //   }
+    // }
+  }
+
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//  Apply a Total Variation Denoising filter on a specific vector =
+//    Coded in LSDStatTools adapted from Condat L.2013            =
+//            DOI: 10.1109/LSP.2013.2278339                       =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+vector<float>  LSDChiTools::TVD_this_vec(vector<int> this_vec, float lambda, float lambda_TVD_b_chi)
+{
+
+  // Creating the containers I will need for the denoising
+  vector<double> this_val_mchi, this_val_bchi, this_val_segelev; //TVD_segelev_diff
+  // this iterator will iterate through the vector of node you want to denoise
+  vector<int>::iterator chirac = this_vec.begin();
+
+  // Loop through the data to gather the vector we want to TVD
+  for( ; chirac != this_vec.end() ; chirac++)
+  {
+    int this_node = *chirac;
+    if(chi_data_map[this_node] != -9999){ //  Checking if there are no data
+
+
+      this_val_mchi.push_back((double)M_chi_data_map[this_node]);
+      this_val_bchi.push_back((double)b_chi_data_map[this_node]);
+      this_val_segelev.push_back((double)segelev_diff[this_node]);
+      // NOTE: We recast everythin to double, floating points somehow generate bugs, in rare cases.
+    }
+
+
+  }
+
+  // Calling the actual denoising coded in Stat tools
+  double clambda = lambda, dlamda = lambda_TVD_b_chi;
+  vector<double> this_val_mchi_TVDed = TV1D_denoise_v2(this_val_mchi, clambda);
+  vector<double> this_val_bchi_TVDed = TV1D_denoise_v2(this_val_bchi, dlamda);
+  vector<double> this_val_segelev_TVDed = TV1D_denoise_v2(this_val_segelev, 5);
+
+  // Our data is Denoised, yaaaay. Let's implement the global map to save it.
+  for(size_t plo = 0; plo < this_vec.size() ; plo++ )
+  {
+    int this_node = this_vec[plo];
+    TVD_m_chi_map[this_node] = (float)this_val_mchi_TVDed[plo];
+    TVD_b_chi_map[this_node] = (float)this_val_bchi_TVDed[plo];
+    TVD_segelev_diff[this_node] = (float)this_val_segelev_TVDed[plo];
+  }
+
+  // Formatting a debugging vector that I sometime use. Ignore that.
+  vector<float> outtemp(this_val_mchi_TVDed.begin(),this_val_mchi_TVDed.end());
+  return outtemp;
+  // Done, EZPZ
+}
+
+void  LSDChiTools::TVD_this_vec_v2(vector<int> this_vec, float lambda, float lambda_TVD_b_chi, int max_node, string type)
+{
+
+  // Creating the containers I will need for the denoising
+  vector<double> this_val_mchi, this_val_bchi, this_val_segelev; //TVD_segelev_diff
+  // this iterator will iterate through the vector of node you want to denoise
+  vector<int>::iterator chirac = this_vec.begin();
+
+
+  for( ; chirac != this_vec.end() ; chirac++)
+  {
+    int this_node = *chirac;
+    if(chi_data_map[this_node] != -9999){
+      this_val_mchi.push_back((double)M_chi_data_map[this_node]);
+      this_val_bchi.push_back((double)b_chi_data_map[this_node]);
+      this_val_segelev.push_back((double)segelev_diff[this_node]);
+    }
+
+  }
+
+  // Calling the actual denoising coded in Stat tools
+  double clambda = lambda, dlamda = lambda_TVD_b_chi;
+  vector<double> this_val_mchi_TVDed = TV1D_denoise_v2(this_val_mchi, clambda);
+  vector<double> this_val_bchi_TVDed = TV1D_denoise_v2(this_val_bchi, dlamda);
+  vector<double> this_val_segelev_TVDed = TV1D_denoise_v2(this_val_segelev, 5);
+
+
+  // vector<double> this_val_TVDed_Corrected = correct_TVD_vec(this_val_TVDed);
+  vector<int> vecnode_to_save;
+  int beginning_index;
+  if(type == "begin")
+  {
+    int slider = int(0.6*max_node);
+    // vector<int>::const_iterator cons = this_vec.begin() + slider;
+    vector<int> temp_vecta(this_vec.begin(), this_vec.begin()+ slider );
+    vecnode_to_save = temp_vecta;
+    beginning_index = 0;
+  }
+  else if(type == "middle")
+  {
+    int beg = int(0.2*max_node);
+    vector<int> temp_vecta(this_vec.begin()+beg,this_vec.end()-beg);
+    vecnode_to_save = temp_vecta;
+    beginning_index = int(0.2*max_node);
+
+  }
+  else
+  {
+    int slider = int(0.4 * max_node);
+    vector<int> temp_vecta(this_vec.begin()+ slider,this_vec.end());
+    vecnode_to_save = temp_vecta;
+    beginning_index = int(0.4 * max_node);
+
+  }
+
+  for(vector<int>::iterator plo = vecnode_to_save.begin(); plo != vecnode_to_save.end() ; plo++ )
+  {
+    // to switch to intermediate after test
+    int this_node = *plo;
+    TVD_m_chi_map[this_node] = (float)this_val_mchi_TVDed[beginning_index];
+    TVD_b_chi_map[this_node] = (float)this_val_bchi_TVDed[beginning_index];
+    TVD_segelev_diff[this_node] = (float)this_val_segelev_TVDed[beginning_index];
+
+    // TVD_m_chi_map_non_corrected[this_node] = (float)this_val_TVDed[plo];
+  }
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// Correct some abberations in the TVD      =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+vector<double> LSDChiTools::correct_TVD_vec(vector<double> this_val)
+{
+  // looping through the nodes, if the value of the nex node exactly equals the value of the previous node
+  // then this is an artifact of the TVD process for some reasons
+
+  size_t tuile = 1;
+  vector<double> this_val_out;
+  // first elements unchanged
+
+
+  this_val_out.push_back(this_val[0]);
+  size_t si = this_val.size();
+
+
+  for(;tuile < this_val.size() - 1 ; tuile++)
+  {
+    // if(this_val[tuile-1] +2 < this_val[tuile]) {cout << this_val[tuile-1] << " || " << this_val[tuile] << " || " << this_val[tuile+1] << endl;}
+    if(this_val[tuile-1] == this_val[tuile+1])
+    {
+      
+      this_val_out.push_back(this_val[tuile-1]);
+    }
+    else
+    {
+      // cout << this_val[tuile-1] << " || " << this_val[tuile+1] << endl ;
+      this_val_out.push_back(this_val[tuile]);
+    }
+  }
+
+  // last elements unchanged as well
+
+  this_val_out.push_back(this_val[si-1]);
+
+
+  return this_val_out;
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// lump the m_chi to detect outliers        =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+void LSDChiTools::lump_my_ksn(int n_nodlump)
+{
+
+  // Set the variables
+  map<int,vector<int> >::iterator chirac;
+  vector<int> this_vec;
+  for(chirac = map_node_source_key.begin(); chirac != map_node_source_key.end() ; chirac ++)
+  {
+    this_vec = chirac->second;
+    size_t testi = 2*n_nodlump;
+    if(this_vec.size() > testi)
+    {
+      lump_this_vec(this_vec,n_nodlump);
+    }
+    else
+    {
+      cout << "ignoring lumping on source " << chirac->first << ": not enough nodes." << endl;
+    }
+  }
+
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// lump m_chi for these specific nodes      =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+void LSDChiTools::lump_this_vec(vector<int> this_vec, int n_nodlump)
+{
+  // Set the variables
+  float this_mean = 0;
+  vector<int>::iterator tnode;
+  vector<float> this_val;
+  int this_node;
+
+  for(tnode = this_vec.begin(); tnode != this_vec.end() ; tnode ++)
+  {
+    this_node = *tnode;
+    this_val.push_back(M_chi_data_map[this_node]);
+  }
+
+  
+  
+  for(size_t op = 0 ; op < this_vec.size() ; op ++)
+  {
+    this_node = this_vec[op];
+    if(int(op) < int(n_nodlump))
+    {
+      vector<float>::const_iterator beg = this_val.begin(), en = this_val.begin()+ n_nodlump + op;
+      vector<float> tvec(beg ,en );
+      this_mean = get_mean_ignore_ndv(tvec, NoDataValue);
+    }
+    else if(op < this_vec.size() - n_nodlump)
+    {
+      vector<float>::const_iterator beg = this_val.begin()+ op, en = this_val.begin()+ op + n_nodlump;
+      vector<float> tvec(beg ,en );
+
+      this_mean = get_mean_ignore_ndv(tvec, NoDataValue);
+
+    }
+    else
+    {
+      vector<float>::const_iterator beg = this_val.begin()+ op, en  = this_val.end();
+      vector<float> tvec(beg ,en );
+
+      this_mean = get_mean_ignore_ndv(tvec , NoDataValue);
+
+    }
+
+    lumped_m_chi_map[this_node] = this_mean;
+  }
+
+
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+// derive the segmented elevation to get it ready for the stepped knickpints quantification =
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+void LSDChiTools::derive_the_segmented_elevation()
+{
+
+  // Set the variables
+  map<int,vector<int> >::iterator chirac;
+  vector<int> this_vec;
+  vector<int>::iterator nonode;
+  int last_node = 0, this_node = 0;
+  
+  // looping through each river
+  for(chirac = map_node_source_key.begin(); chirac != map_node_source_key.end() ; chirac ++)
+  {
+    this_vec = chirac->second;
+
+    // looping through each node in the river if the river has at least two nodes
+    if(this_vec.size() > 1)
+    {
+      for(nonode = this_vec.begin(); nonode != this_vec.end(); nonode++)
+      {
+        this_node = *nonode;
+        if(nonode != this_vec.begin())
+        {
+          // i derive if this is not the last node
+          this_node = *nonode;
+          segelev_diff[this_node] = (segmented_elevation_map[last_node] - segmented_elevation_map[this_node]); // ---> to had if we derive it to chi (chi_data_map[last_node] - chi_data_map[this_node]); 
+          segelev_diff_second[this_node] = segelev_diff_second[last_node] - segelev_diff_second[this_node];
+        }
+        else
+        {
+          // the first derivative is 0
+          segelev_diff[this_node] = 0;
+          segelev_diff_second[this_node] = 0;
+          
+
+        }
+        // incrementing the rest
+        last_node = this_node;
+      }
+    }
+
+  }
+
+}
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Calculate the KDE over the knickpoint map
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::ksn_kp_KDE()
+{
+  // first setting the main iterator
+  map<int,vector<int> >::iterator jacques;
+
+  // function variables
+  int this_SK = 0;
+  vector<int> vecnode;
+
+  for(jacques = map_node_source_key_kp.begin(); jacques != map_node_source_key_kp.end(); jacques++)
+  {
+    this_SK = jacques->first;
+    vecnode = jacques->second;
+    if(vecnode.size()>0)
+     {KDE_vec_node_mchi(vecnode,this_SK);}
+
+  }
+
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Calculate the KDE using the mchi value corresponding to a vector of node index
+// BG
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+void LSDChiTools::KDE_vec_node_mchi(vector<int> vecnode, int SK)
+{
+  // setting the iterator
+  vector<int>::iterator valachie = vecnode.begin();
+
+  // first getting the corresponding vector of values
+  vector<float> veksn, veKDE;
+  int this_node = 0;
+  for(;valachie != vecnode.end(); valachie++)
+  {
+    this_node = *valachie;
+    veksn.push_back(raw_dksndchi_kp_map[this_node]);
+  }
+
+  // now getting the KDE corresponding vector
+  pair<float,vector<float> > pagul = auto_KDE(veksn);
+
+  // incrementing the bandwidth map
+  KDE_bandwidth_per_source_key[SK] = pagul.first;
+
+  // dealing with retrieving the KDE per nodes
+  veKDE = pagul.second;
+  float this_KDE = 0;
+  for(size_t uip = 0; uip < veKDE.size(); uip++)
+  {
+    this_node = vecnode[uip];
+    this_KDE = veKDE[uip];
+    raw_KDE_kp_map[this_node] = this_KDE;
+  }
+
+}
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Automate the outlier detection - ATM I am testing a bunch ou method
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::ksn_knickpoint_outlier_automator(LSDFlowInfo& FlowInfo, float MZS_th)
+{
+
+  // Ok looping through river
+  map<int,vector<int> >::iterator salazar;
+  vector<int> vecnode,vecoutlier_MZS_dkdc;
+  vector<float> vecval;
+  for(salazar = map_node_source_key_kp.begin(); salazar!= map_node_source_key_kp.end(); salazar++)
+  {
+
+    vecnode = salazar->second;
+    if(vecnode.size()>0)
+    {
+      vecval = get_value_from_map_and_node(vecnode,raw_dksndchi_kp_map);
+      vecoutlier_MZS_dkdc = is_outlier_MZS(vecval, NoDataValue, MZS_th);
+
+      for(size_t hi = 0; hi < vecnode.size(); hi++)
+      {
+        map_outlier_MZS_dksndchi[vecnode[hi]] = vecoutlier_MZS_dkdc[hi];
+      }
+    }
+
+  }
+
+  // now dealing with the values after combining the knickpoints
+  vecval.clear();
+  vecnode.clear();
+
+  // getting all the final knickpoints
+  for(map<int,float>::iterator gorilla = ksn_kp_map.begin(); gorilla != ksn_kp_map.end(); gorilla ++)
+  {
+    vecnode.push_back(gorilla->first);
+    vecval.push_back(gorilla->second);
+  }
+
+  vector<int> vecoutlier_MZS_combined = is_outlier_MZS(vecval, NoDataValue, MZS_th);
+
+  for(size_t hi = 0; hi < vecnode.size(); hi++)
+  {
+    map_outlier_MZS_combined[vecnode[hi]] = vecoutlier_MZS_combined[hi];
+  }
+
+
+
+
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// write a file with the source_key, basinkey and the associated bandwidth
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+void LSDChiTools::print_bandwidth_ksn_knickpoint(string filename)
+{
+  
+    // open the data file
+  ofstream  file_out;
+  file_out.open(filename.c_str());
+  file_out << "source_key,basin_key,length,chi,bandwidth" << endl;
+
+  int this_source_key, this_basin_key, this_node = 0;
+  float this_bandwidth = 0;
+  map<int,vector<int> >::iterator OL;
+
+  for(OL = map_node_source_key.begin(); OL !=  map_node_source_key.end() ; OL++)
+  {
+    this_source_key = OL->first;
+    this_node = OL->second[0];
+    this_basin_key = baselevel_keys_map[this_node];
+    this_bandwidth = KDE_bandwidth_per_source_key[this_source_key];
+    file_out << this_source_key << ","
+             << this_basin_key << ","
+             << map_flow_length_source_key[this_source_key] << ","
+             << map_chi_length_source_key[this_source_key] << ","
+             << this_bandwidth << endl;
+  }
+  file_out.close();
+
+}
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// write a file with the raw ksn knickpoints
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+void LSDChiTools::print_raw_ksn_knickpoint(LSDFlowInfo& FlowInfo, string filename)
+{
   // these are for extracting element-wise data from the channel profiles.
-  cout << "I am now writing your ksn knickpoint file:" << endl;
-  int this_node, row,col;
+
+  int this_node,row,col;
+  float this_kp;
   double latitude,longitude;
   LSDCoordinateConverterLLandUTM Converter;
 
@@ -2045,8 +3423,235 @@ void LSDChiTools::print_knickpoint_to_csv(LSDFlowInfo& FlowInfo, string filename
   // open the data file
   ofstream  chi_data_out;
   chi_data_out.open(filename.c_str());
-  chi_data_out << "latitude,longitude,elevation,flow_distance,chi,drainage_area,diff,ratio,sign,source_key,basin_key";
+  chi_data_out << "longitude,latitude,elevation,flow_distance,chi,drainage_area,delta_ksn,dksn/dchi,KDE,basin_key,out_MZS,source_key";
 
+  chi_data_out << endl;
+
+  if (n_nodes <= 0)
+  {
+    cout << "Cannot print since you have not calculated channel properties yet." << endl;
+  }
+  else
+  {
+    map<int,float>::iterator iter;
+
+    for (iter = raw_ksn_kp_map.begin(); iter != raw_ksn_kp_map.end(); iter++)
+    {
+        this_node = iter->first;
+        this_kp = iter->second;
+        FlowInfo.retrieve_current_row_and_col(this_node,row,col);
+        get_lat_and_long_locations(row, col, latitude, longitude, Converter);
+
+
+
+        chi_data_out.precision(9);
+        chi_data_out << latitude << ","
+                     << longitude << ",";
+        chi_data_out.precision(5);
+        chi_data_out << elev_data_map[this_node] << ","
+                     << flow_distance_data_map[this_node] << ","
+                     << chi_data_map[this_node] << ","
+                     << drainage_area_data_map[this_node] << ","
+                     << this_kp << ","
+                     << raw_dksndchi_kp_map[this_node] << ","
+                     << raw_KDE_kp_map[this_node] << ","
+                     << baselevel_keys_map[this_node]<< ","
+                     << map_outlier_MZS_dksndchi[this_node] << ","
+                     << source_keys_map[this_node];
+
+        chi_data_out << endl;
+    }
+  }
+
+  chi_data_out.close();
+  
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// write a file with the final knickpoint output
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+void LSDChiTools::print_final_ksn_knickpoint(LSDFlowInfo& FlowInfo, string filename)
+{
+  // these are for extracting element-wise data from the channel profiles.
+
+  int this_node,row,col;
+  float this_kp;
+  double latitude,longitude;
+  LSDCoordinateConverterLLandUTM Converter;
+
+  // find the number of nodes
+  int n_nodes = (node_sequence.size());
+
+  // Map to check if a node has already been processed or not when adding the stepped component later
+  map<int,bool> is_done;
+  // open the data file
+  ofstream  chi_data_out;
+  chi_data_out.open(filename.c_str());
+  chi_data_out << "node,X,Y,latitude,longitude,elevation,flow_distance,chi,drainage_area,delta_ksn,delta_segelev,sharpness,sign,out,basin_key,source_key";
+
+  chi_data_out << endl;
+
+  if (n_nodes <= 0)
+  {
+    cout << "Cannot print since you have not calculated channel properties yet." << endl;
+  }
+  else
+  {
+    map<int,float>::iterator iter;
+
+    for (iter = ksn_kp_map.begin(); iter != ksn_kp_map.end(); iter++)
+    {
+        this_node = iter->first;
+        this_kp = iter->second;
+        int nearnode = nearest_node_centroid_kp[this_node];
+        // int nearnode_stepped = nearest_node_centroid_kp_stepped[this_node];    // not used (SMM)
+        float this_segelev = 0;
+
+        if(kp_segdrop.count(nearnode) == 1)
+        {
+          is_done[nearnode] = true;
+          this_segelev = kp_segdrop[nearnode];
+        }
+        // get the centroid location
+        // float this_x = ksn_centroid[this_node].first, this_y = ksn_centroid[this_node].second; // BUGGY AT THE MOMENT
+        float this_x = 0, this_y =0;
+        FlowInfo.retrieve_current_row_and_col(nearnode,row,col);
+        get_x_and_y_locations(row, col, this_x, this_y);
+
+        get_lat_and_long_locations_from_coordinate(this_x, this_y, latitude, longitude, Converter);
+
+        // Just adding sign column for plotting purposes
+        int this_sign = 0;
+        if(this_kp>0){this_sign = 1;}else{this_sign=(-1);}
+
+        chi_data_out << this_node << ",";
+        chi_data_out << this_x << ",";
+        chi_data_out << this_y << ",";
+        chi_data_out.precision(9);
+        chi_data_out << latitude << ","
+                     << longitude << ",";
+        chi_data_out.precision(5);
+        // NOTE: The IDENTIFYING NODE on the knickpoint map is the first of a knickpoint group - On the global map it provide the nearest node to get the coordinates of the centroid
+        chi_data_out << elev_data_map[nearnode] << "," // NOTE -> nearnode is the centroid node, however the knickpoint info are stored in this node. I am still working on the centroidisation of the node
+                     << flow_distance_data_map[nearnode] << ","
+                     << chi_data_map[nearnode] << "," // NOTE -> nearnode is the centroid node, however the knickpoint info are stored in this node. I am still working on the centroidisation of the node
+                     << drainage_area_data_map[nearnode] << "," // NOTE -> nearnode is the centroid node, however the knickpoint info are stored in this node. I am still working on the centroidisation of the node
+                     << this_kp << ","
+                     << this_segelev << ","
+                     << sharpness_ksn_length[this_node] << ","
+                     << this_sign << ","
+                     << map_outlier_MZS_combined[this_node] << ","
+                     << baselevel_keys_map[this_node]<< ","
+                     << source_keys_map[this_node];
+
+        chi_data_out << endl;
+    }
+
+    // I have printed the ksn knickpoints to the file, and the stepped knickpoints when located at the same location. I have recorded the one I've already written.
+    // Now I'll complete the writing with the knickpoints that are only stepped
+
+    for (iter = kp_segdrop.begin(); iter != kp_segdrop.end(); iter++)
+    {
+        this_node = iter->first;
+        float this_segelev = iter->second;
+        // int nearnode = nearest_node_centroid_kp_stepped[this_node];
+        float this_kp = 0; // All the ksn knickpoints have been written, these one only have a segelev component
+
+        // if(chi_data_map[this_node] == 0)
+        // {
+        //   cout << "This node is screwed" <<endl;
+        // }
+        // if(chi_data_map[nearnode] == 0)
+        // {
+        //   cout << "nearnode is screwed" <<endl ;
+        // }
+
+        if(is_done.count(this_node) != 1 && chi_data_map[this_node] != 0)
+        {
+          // cout << "Tbg 45b" << endl;
+          // get the centroid location
+          // float this_x = ksn_centroid[this_node].first, this_y = ksn_centroid[this_node].second; // BUGGY AT THE MOMENT
+          float this_x = 0, this_y =0;
+          FlowInfo.retrieve_current_row_and_col(this_node,row,col);
+          get_x_and_y_locations(row, col, this_x, this_y);
+
+          get_lat_and_long_locations_from_coordinate(this_x, this_y, latitude, longitude, Converter);
+
+          // Just adding sign column for plotting purposes
+          int this_sign = 1;
+          chi_data_out << this_node << ",";
+          chi_data_out << this_x << ",";
+          chi_data_out << this_y << ",";
+          chi_data_out.precision(9);
+          chi_data_out << latitude << ","
+                       << longitude << ",";
+          chi_data_out.precision(5);
+          // NOTE: The IDENTIFYING NODE on the knickpoint map is the first of a knickpoint group - On the global map it provide the nearest node to get the coordinates of the centroid
+          chi_data_out << elev_data_map[this_node] << "," // NOTE -> this_node is the centroid node, however the knickpoint info are stored in this node. I am still working on the centroidisation of the node
+                       << flow_distance_data_map[this_node] << ","
+                       << chi_data_map[this_node] << "," // NOTE -> this_node is the centroid node, however the knickpoint info are stored in this node. I am still working on the centroidisation of the node
+                       << drainage_area_data_map[this_node] << "," // NOTE -> this_node is the centroid node, however the knickpoint info are stored in this node. I am still working on the centroidisation of the node
+                       << this_kp << ","
+                       << this_segelev << ","
+                       << sharpness_ksn_length[this_node] << ","
+                       << this_sign << ","
+                       << map_outlier_MZS_combined[this_node] << ","
+                       << baselevel_keys_map[this_node]<< ","
+                       << source_keys_map[this_node];
+
+          chi_data_out << endl;
+        }
+    }
+
+  }
+  // done, let me close the file correctly
+  chi_data_out.close();
+  
+}
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Print data maps to file for the knickpoint algorithm
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::print_mchisegmented_knickpoint_version(LSDFlowInfo& FlowInfo, string filename)
+{
+
+  // these are for extracting element-wise data from the channel profiles.
+  int this_node, row, col;
+  double latitude,longitude;
+  double this_x,this_y;
+  LSDCoordinateConverterLLandUTM Converter;
+
+  // find the number of nodes
+  int n_nodes = (node_sequence.size());
+
+  // test to see if there is segment numbering
+  bool have_segments = false;
+  if( segment_counter_map.size() == node_sequence.size())
+  {
+    have_segments = true;
+  }
+
+  // test to see if the fitted elevations have been calculated
+  bool have_segmented_elevation = false;
+  have_segmented_elevation = true;
+  
+
+
+  // open the data file
+  ofstream  chi_data_out;
+  chi_data_out.open(filename.c_str());
+  chi_data_out << "node,X,Y,row,col,latitude,longitude,chi,elevation,flow_distance,drainage_area,m_chi,lumped_ksn,TVD_ksn,TVD_segelev_diff,b_chi,TVD_b_chi,ksnkp,segelevkp,source_key,basin_key";
+  if(have_segmented_elevation)
+  {
+    chi_data_out << ",segmented_elevation,mean_segdiff,std_segdiff,segdiff";
+  }
+  if (have_segments)
+  {
+    chi_data_out << ",segment_number";
+    cout << "I added the segment number in the csv file"<< endl;
+  }
   chi_data_out << endl;
 
 
@@ -2060,27 +3665,645 @@ void LSDChiTools::print_knickpoint_to_csv(LSDFlowInfo& FlowInfo, string filename
   {
     for (int n = 0; n< n_nodes; n++)
     {
-        this_node = node_sequence[n];
+      this_node = node_sequence[n];
+      FlowInfo.retrieve_current_row_and_col(this_node,row,col);
+      get_lat_and_long_locations(row, col, latitude, longitude, Converter);
+      get_x_and_y_locations(row, col, this_x, this_y);
+      int ksnkp = 0, segelevkp = 0; // 0 = no knickpoint, -1 negative, 1 positive
+      // checking if there is a raw knickpoint here
+      if(raw_ksn_kp_map.count(this_node)!=0) 
+      {
+        if(raw_ksn_kp_map[this_node]>0)
+        {
+          ksnkp = 1;
+        }
+        else if(raw_ksn_kp_map[this_node]<0)
+        {
+          ksnkp = -1;
+        }
+
+        if(segelev_diff[this_node]>0)
+        {
+          segelevkp = 1;
+        }
+        if(segelev_diff[this_node]>0)
+        {
+          segelevkp = -1;
+        }
+
+      }
+
+      chi_data_out << this_node << ","
+                   << this_x << ","
+                   << this_y << ","
+                   << row << ","
+                   << col << ",";
+
+      chi_data_out.precision(9);
+      chi_data_out << latitude << ","
+                   << longitude << ",";
+      chi_data_out.precision(5);
+      chi_data_out << chi_data_map[this_node] << ","
+                   << elev_data_map[this_node] << ","
+                   << flow_distance_data_map[this_node] << ","
+                   << drainage_area_data_map[this_node] << ","
+                   << M_chi_data_map[this_node] << ","
+                   << lumped_m_chi_map[this_node] << ","
+                   << TVD_m_chi_map[this_node] << ","
+                   << TVD_segelev_diff[this_node] << ","
+                   << b_chi_data_map[this_node] << ","
+                   << TVD_b_chi_map[this_node] << ","
+                   << ksnkp << ","
+                   << segelevkp << ","                  
+                   << source_keys_map[this_node] << ","
+                   << baselevel_keys_map[this_node];
+
+      if(have_segmented_elevation)
+      {
+        chi_data_out << "," << segmented_elevation_map[this_node];
+        chi_data_out << "," << mean_for_kp[this_node];
+        chi_data_out << "," << std_for_kp[this_node];
+        chi_data_out << "," << segelev_diff[this_node];
+
+
+      }
+      if (have_segments)
+      {
+        chi_data_out << "," << segment_counter_map[this_node];
+      }
+      chi_data_out << endl;
+    }
+  }
+
+  chi_data_out.close();
+
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+void LSDChiTools::set_map_of_source_and_node(LSDFlowInfo& FlowInfo, int n_node_downstream)
+{
+  // find the number of nodes
+  // setting the initilal condition
+  int n_nodes = (node_sequence.size()), last_SK = source_keys_map[node_sequence[0]], this_SK = source_keys_map[node_sequence[0]], this_node = node_sequence[0], temp_receiver_node = 0, last_node = 0;
+  if (n_nodes <= 0)
+  {
+    cout << "Cannot calculate segments since you have not calculated channel properties yet." << endl;
+    exit(EXIT_FAILURE);
+  }
+  else
+  {
+    // setting temporary vector that I may need
+    vector<int> temp_node_SK;
+    temp_node_SK.push_back(this_node);
+
+    // Now looping through all the node, gathering the one in the same river
+    for (int n = 0; n< n_nodes; n++)
+    {
+      // getting each nodes information
+      this_node = node_sequence[n];
+      this_SK = source_keys_map[this_node];
+      if(this_SK == last_SK)
+      {
+        // If the source key is the same than the previous one ---> incrementing the vector of node for each river
+        temp_node_SK.push_back(this_node);
+      }
+      else
+      {
+        // Investigating the knickpoints between the tributaries and the main stem. I am saving that in a different file.
+        // if different source key: first getting the receiving node
+        vector<int> vector_of_nodes_dowstream_for_this_source_key; 
+        for(int i = 0; i<n_node_downstream; i++)
+        {
+          FlowInfo.retrieve_receiver_information(last_node,temp_receiver_node);
+          // pushing it back
+          if(temp_receiver_node != -9999 || temp_receiver_node != NoDataValue || temp_receiver_node != 0)
+          {
+            vector_of_nodes_dowstream_for_this_source_key.push_back(temp_receiver_node);
+          }
+        }
+        // saving this source key
+        map_node_source_key[last_SK] = temp_node_SK;
+        map_source_key_vecnode_of_receiver[last_SK] = vector_of_nodes_dowstream_for_this_source_key;
+        // clearing the vector for the next source key and saving the current node in the new river
+        temp_node_SK.clear();
+        temp_node_SK.push_back(this_node);
+      }
+      // saving the last node info for next loop
+      last_SK = this_SK;
+      last_node = this_node;
+    }
+  }
+// Done
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Just get the length, number of nodes and other basic metrics about the river
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::compute_basic_matrics_per_source_keys(LSDFlowInfo& FlowInfo)
+{
+
+  // setting the variables
+  map<int,vector<int> >::iterator valachie;
+  int this_SK =0;
+  float dist = 0 , chi_dist = 0;
+  vector<int> vecval;
+
+  // Looping through each source key and getting the length of river in meters and chi space.
+  // note: the first and last node of the vector are the extremes of each rivers plus the receiver node.
+  for(valachie = map_node_source_key.begin(); valachie != map_node_source_key.end(); valachie++)
+  {
+    this_SK = valachie->first;
+    vecval = valachie->second;
+    chi_dist = abs(chi_data_map[vecval[0]] - chi_data_map[vecval.back()]);
+    dist = abs(flow_distance_data_map[vecval[0]] - flow_distance_data_map[vecval.back()]);
+    map_flow_length_source_key[this_SK] = dist;
+    map_chi_length_source_key[this_SK] = chi_dist;
+  }
+}
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// medium old function for the knickpoint detection
+// save the difference and ratio between m_chi values of each segments
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::ksn_knickpoint_detection(LSDFlowInfo& FlowInfo)
+{
+
+  // setting the variables for extracting the knickpoints
+  int this_node = 0; // Node to investigate
+  map<int,float> this_kickpoint_diff_map; // map of the delta k_sn, key is node number from Flowinfo
+  map<int,float> this_knickpoint_rad; // map of the radian angle, key is node number from Flowinfo
+  map<int,float> this_kickpoint_ratio_map; // map of the ratio k_sn, key is node number from Flowinfo
+  map<int,int> this_knickpoint_sign_map; // map of the sign k_sn, key is node number from Flowinfo
+  float last_M_chi, this_M_chi, last_M_atan, this_M_atan; // Floating storage of each last/new knickpoint value
+  float delta_mchi = 0; // difference between last and new m_chi
+  float ratio_mchi = 0; // ratio between last and new m_chi
+  float delta_atan = 0; // difference for the slope in radian
+  int knickpoint_sign = 0; // sign of the knickpoint: + =1 and - = -1
+  int last_node = 0; // store the last investigated node to investigate
+  int number_of_0 = 0; // debug storage of the number of knickpoint ratio recasted to avoid x/0
+  int n_knp = 0; // hum ... probably the number of knickpoint, I have no recognition of this
+  float max_elev = 0; // used to recast the M_chi value for angle determination 
+  float max_chi = 0; // used to recast the M_chi value for angle determination
+  float natural_coeff = 0;  // used to recast the M_chi value for angle determination
+  map<int,vector<int> > this_node_kp_per_source_key; // this map store the node of each river knickpoint, the key is the source_key
+  map<int,float> this_cumul_ksn_map; // This map store the cumulative ksn for each rivers
+  map<int,float> this_cumul_rksn_map; // This map store the cumulative ratio ksn for each rivers
+  map<int,float> this_cumul_rad_map; // This map store the cumulative ksn for each rivers
+  map<pair<int,int>, float> this_knickzone_raw_cumul_ksn_map; //this map store the raw cumulative value of each knickpoints
+  map<pair<int,int>, float> this_knickzone_raw_cumul_rksn_map; //this map store the raw cumulative value of each knickpoints
+  map<pair<int,int>, float> this_knickzone_raw_cumul_rad_map; //this map store the raw cumulative value of each knickpoints
+  map<pair<int,int>, vector<int> > this_knickzone_list_of_nodes; // This map stores the nodes of each knickzones
+
+
+  // find the number of nodes
+  int n_nodes = (node_sequence.size());
+  if (n_nodes <= 0)
+  {
+    cout << "Cannot calculate segments since you have not calculated channel properties yet." << endl;
+    exit(EXIT_FAILURE);
+  }
+  else
+  {
+    // Preprocessing step, I am getting the maximum of chi values, in order to recast the calculation of the angle.
+    // short explanation: the angle is calculated using arctan to get a rad of the segment. ksn is obtained by calculating Mchi with A0 = 1
+    // This usually give to Chi values between 0 and 20~30ish depending on the landscape. We keep this value for the ksn knickpoints calculation
+    // However, to get a "natural" angle, we recast the Mchi to correspond to a Chi value comparable to the elevation, thus using a A0 to get a maximum chi similar to the maximum elevation.
+
+    // First we want to get the maximum elevation and the maximum chi and the nodes per rivers
+    set_map_of_source_and_node(FlowInfo, 20);
+    for (int n = 0; n< n_nodes; n++)
+    {
+      if(elev_data_map[node_sequence[n]] > max_elev)
+      {
+        max_elev = elev_data_map[node_sequence[n]];
+      }
+      if(chi_data_map[node_sequence[n]] > max_chi)
+      {
+        max_chi = chi_data_map[node_sequence[n]];
+      }
+    }
+
+    // natural coeff is then maxz/maxChi (= A0_new^(-m/n))
+    natural_coeff = max_elev/max_chi;
+    natural_coeff = 1/(natural_coeff);
+
+
+    // At this point, you have the required condition to launch the knickpoint analysis
+    cout << "I am now extracting the knickpoint dataset" << endl;
+
+    // Initializing the first node
+    this_node = node_sequence[0];
+    last_M_chi =  M_chi_data_map[this_node];
+
+    // Engaging the loop through the rivers nodes
+    for (int n = 0; n< n_nodes; n++)
+    {
+      // set the nodes number and keep information about the previous one
+      last_node = this_node;
+      this_node = node_sequence[n];
+
+
+      // Get the M_chi from the current node
+      this_M_chi = M_chi_data_map[this_node];
+      last_M_chi = M_chi_data_map[last_node];
+
+      // recasting if negative M_Chi. These negative values are artifact for really flat segments, recasting it to 0 is then inconsequential
+      if(this_M_chi < 0 && n>0){this_M_chi = 0;} // getting rid of the negative values because we don't want it, I don't want the n = 0 to avoid detecting fake knickpoint if the first value is actually negative
+
+      // If the M_chi has changed I increment the knickpoints, I also check if the two point are on the same channel to avoid stange unrelated knickpoints
+      if (this_M_chi != last_M_chi && source_keys_map[this_node] == source_keys_map[last_node])
+      {
+        // If this condition is satisfied, we change segment and the knickpoint will be saved
+        // -> first thing to do is to save the node into the map of knickpoint per river
+        this_node_kp_per_source_key[source_keys_map[this_node]].push_back(this_node);
+       
+
+        // Calculation of the arctan of the M_Chi to get angle of M_chi segment, We want the absolute value, atan can have some sign issue. Uses of atan2 solve this quadrant issue, however require the x/y value that would be painful to get here
+        // We use the natural coeff to adjust M_chi
+        last_M_atan = abs(atan(natural_coeff * last_M_chi));// if you want degrees *180/M_PI;
+        this_M_atan = abs(atan(natural_coeff * this_M_chi));// if you want degrees *180/M_PI;
+
+        // dealing with division/0 and calculation of the ratio
+        if(this_M_chi == 0)
+        {
+          ratio_mchi = -9999; // correspond to +infinite
+          number_of_0++;
+        }
+        else
+        {
+          ratio_mchi = last_M_chi/this_M_chi; // Ratio between last and new chi steepness
+        }
+
+        // calculation of the delta between the two segments referred as diff
+        delta_mchi = (last_M_chi-this_M_chi); // diff between last and new chi steepness - note that there is no minus because we loop up to bottom
+
+        // Determination of the sign
+        if(delta_mchi<=0){knickpoint_sign = -1;} else {knickpoint_sign = 1;} // Assign the knickpoint sign value
+
+        // Delta between the radian angle 
+        delta_atan = (last_M_atan - this_M_atan); // note that the minus is because we loop up to bottom, in fact no, no minus, my bad
+
+        // Allocate the values to local maps
+        this_kickpoint_diff_map[this_node] = delta_mchi;
+        this_kickpoint_ratio_map[this_node] = ratio_mchi;
+        this_knickpoint_rad[this_node] = delta_atan;
+        this_knickpoint_sign_map[this_node] = knickpoint_sign;
+        n_knp ++;
+        // end of the loop
+      }
+    }
+
+    // Now calculating the cumulation of angle and ksn, we could incorporate that in the last loop, but it is clearer that way I think. The loss of efficienty isn't too bad
+
+    // Iteration over each river, 
+    map<int,vector<int> >::iterator marten; //I quite like the map<...>::iterator
+    int begining_node = 0, ending_node = 0, last_node_tapir = 0; // temporaries integers
+    vector<int> node_to_implement_for_the_knickzone_cumulation;
+    vector<int> node_per_knickzones; 
+    pair<int,int> temp_knickzone (0,0);
+    for(marten = (this_node_kp_per_source_key.begin());marten != this_node_kp_per_source_key.end();marten++)
+    {
+
+      for(vector<int>::reverse_iterator tapir = marten->second.rbegin(); tapir!= marten->second.rend(); ++tapir) // The iterator can be reversed to loop backward !! I love iterators. 
+      {
+        // Now looping through the knickpoint of each river, *tapir is the pointer that refers to node number. /!\ Note that I am loooing using a reverse_iterator to go from the bottom to the top of each river
+        
+        // now calculating the cumulation for each methods
+        // # First case, the node is the first of the river, we want to save the value as the first to be cumulated
+        if(tapir == marten->second.rbegin())
+        {
+        // Getting the requested ksn values
+        ksn_cumul_knickpoint_map[*tapir] = this_kickpoint_diff_map[*tapir]; // cumulating the ksn value
+        // Getting the requested ratio ksn values
+        rksn_cumul_knickpoint_map[*tapir] = this_kickpoint_ratio_map[*tapir]; // cumulating the rksn value
+        // Getting the radian values
+        rad_cumul_knickpoint_map[*tapir] = this_knickpoint_rad[*tapir]; // cumulating the rad value 
+
+        node_to_implement_for_the_knickzone_cumulation.push_back(*tapir); // saving the node for completion
+        begining_node = *tapir; //this will be a beginning node whatever happense
+
+        }
+        // if this is the last element of the river, we save everything and reinitialize for the following
+        else if(tapir == marten->second.rend()-1)
+        {
+          if(this_knickpoint_sign_map[last_node_tapir] == this_knickpoint_sign_map[*tapir])
+          {
+            ksn_cumul_knickpoint_map[*tapir] += this_kickpoint_diff_map[*tapir];
+            rksn_cumul_knickpoint_map[*tapir] += this_kickpoint_ratio_map[*tapir];
+            rad_cumul_knickpoint_map[*tapir] += this_knickpoint_rad[*tapir];
+            ending_node = *tapir;
+            temp_knickzone = make_pair (begining_node,ending_node);
+
+            node_to_implement_for_the_knickzone_cumulation.push_back(*tapir);
+            this_knickzone_list_of_nodes[temp_knickzone] = node_to_implement_for_the_knickzone_cumulation; // saving the list of nodes per knickzones
+
+          }
+          else
+          {
+            ksn_cumul_knickpoint_map[*tapir] += this_kickpoint_diff_map[*tapir];
+            rksn_cumul_knickpoint_map[*tapir] += this_kickpoint_ratio_map[*tapir];
+            rad_cumul_knickpoint_map[*tapir] += this_knickpoint_rad[*tapir];
+            temp_knickzone = make_pair (begining_node,ending_node);
+            this_knickzone_list_of_nodes[temp_knickzone] = node_to_implement_for_the_knickzone_cumulation;
+
+            node_to_implement_for_the_knickzone_cumulation.clear();
+            begining_node = *tapir;
+            ending_node = *tapir;
+            temp_knickzone = make_pair (begining_node,ending_node);
+            this_knickzone_list_of_nodes[temp_knickzone] = node_to_implement_for_the_knickzone_cumulation;
+
+          }
+
+          // reinitializing vector
+          node_to_implement_for_the_knickzone_cumulation.clear();
+        }
+        // # Other Case, the signs are the same, so we just cumulate the values and save the node to change
+        else if(this_knickpoint_sign_map[last_node_tapir] == this_knickpoint_sign_map[*tapir])
+        {
+          ksn_cumul_knickpoint_map[*tapir] += this_kickpoint_diff_map[*tapir]; // cumulating the ksn valu
+          rksn_cumul_knickpoint_map[*tapir] += this_kickpoint_ratio_map[*tapir]; // cumulating the rksn valu
+          rad_cumul_knickpoint_map[*tapir] += this_knickpoint_rad[*tapir]; // cumulating the rad value
+          node_to_implement_for_the_knickzone_cumulation.push_back(*tapir); // saving the node for completion
+        }
+        // # Finally, the sign are differents so we save the cumulative value for each nodes of the raw knickzone then reinitialize everything for the following
+        else
+        {
+
+          // This also end a knickzone
+          ending_node = last_node_tapir;
+          temp_knickzone = make_pair (begining_node,ending_node);
+          this_knickzone_list_of_nodes[temp_knickzone] = node_to_implement_for_the_knickzone_cumulation; // saving the list of nodes per knickzones
+
+          begining_node = *tapir;
+          // reinitializing vector
+          node_to_implement_for_the_knickzone_cumulation.clear();
+          node_to_implement_for_the_knickzone_cumulation.push_back(*tapir);
+        } 
+
+        // Here lies the remianing of my beloved derivation code that diseapeared after realizing how useless it was
+
+        // storing the last chi value for the derivative
+        last_node_tapir = *tapir;
+      }
+    }
+  }
+
+  // print everything in the public/protected maps -> saving the calculated data in the system
+  ksn_ratio_knickpoint_map = this_kickpoint_ratio_map;
+  ksn_diff_knickpoint_map = this_kickpoint_diff_map;
+  ksn_sign_knickpoint_map = this_knickpoint_sign_map;
+  ksn_rad_knickpoint_map = this_knickpoint_rad;
+  ksn_cumul_knickpoint_map = this_cumul_ksn_map;
+  rksn_cumul_knickpoint_map = this_cumul_rksn_map;
+  rad_cumul_knickpoint_map = this_cumul_rad_map;
+
+  knickzone_weighting_completion(this_knickzone_list_of_nodes);
+
+  //  cout << "I finished to detect the knickpoints, you have " << n_knp << " knickpoints, thus " << number_of_0 << " ratios are switched to -9999 due to 0 divisions." << endl;
+
+}
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Loop through all the knickzones to weight all the different combinations
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::knickzone_weighting_completion(map<pair<int,int>, vector<int> > mapofnode)
+{
+  // Good resolution, I'll try to better comment my codes now then
+  // This function attend to weight and save all the combinations of knickzones previously calculated
+  // The idea is to apply an outlier to each possibles knickzones to select the most probable ones
+  // I'll begin by declaring all the variables I'll need for this purpose
+  int begining_node = 0, ending_node = 0, this_knickzone_ID = 0;
+  vector<int> working_nodes; //  temporary vector to store the working nodes
+  float chi_size = 0, weighted_sum_ksn = 0, weighted_sum_rksn = 0, weighted_sum_rad = 0, weighter_coeff = 1, weighter = 0, ksn_sum = 0, rksn_sum = 0, rad_sum = 0 ; 
+  pair<int,int> temp_pair;
+
+
+  // Message to check
+  cout<< "I am now testing and writing all the possible knickzones combinations, weighted by their chi lenght. The execution time depends on the number of detected knickzones and can take a while." << endl;
+
+  // then I'll loop throught the map:
+  // first through the list of knickzones
+  map<pair<int,int>, vector<int> >::iterator Dwarf_epauletted_fruit_bat; // iterator is a tool to loop through map, efficiently and cleanly, with a random animal name because it is monday morning and life need random animal names on a monday morning
+  for(Dwarf_epauletted_fruit_bat = mapofnode.begin(); Dwarf_epauletted_fruit_bat!=mapofnode.end();Dwarf_epauletted_fruit_bat++)
+  {
+
+    working_nodes = Dwarf_epauletted_fruit_bat->second;
+    //Ok, now I am looping through the nodes of each knickzones
+    for(size_t ity = 0; ity!= working_nodes.size();ity ++)
+    {
+      //I am letting this typical debug statement to check if I am in a ascending mode or not. It can be consufing depending How I looped before 
+      // cout << elev_data_map[Dwarf_epauletted_fruit_bat->second[ity]] << "||" << ity << endl;
+      // I am in an ascending node mode
+
+      // Just A quick note why I am note using iterator for this vector iteration, I find iterator really useful but slightly less clear when we want to use previous or next element in a vector or array
+      // Note that I don't know yet If I will use that but anyway let's code
+
+      // The difficulty here is too loop through all the knickzone combinations:
+      // We need to loop through all the i to n combinations with 0 <= i <= n 
+
+      // Each knickzone will be store in the global knickzone_WP_ksn maps
+
+      begining_node = working_nodes[ity];
+      ending_node = working_nodes[working_nodes.size()-1];
+
+      // Checking if the knickzone does have 
+      if(begining_node != ending_node)
+      {
+        chi_size = chi_data_map[ending_node]-chi_data_map[begining_node]; 
+        weighter_coeff = 1;
+        // second iteration through the knickzone
+        for(size_t frutbat = ity; frutbat != working_nodes.size(); frutbat ++)
+        {
+          ending_node = working_nodes[frutbat];
+          weighter = (exp((-(chi_data_map[ending_node]-chi_data_map[begining_node])) / (chi_size * weighter_coeff) ) );
+          weighted_sum_ksn += (ksn_diff_knickpoint_map[ending_node] * weighter);
+          weighted_sum_rksn += (ksn_ratio_knickpoint_map[ending_node] * weighter);
+          weighted_sum_rad += (ksn_rad_knickpoint_map[ending_node] * weighter);
+          ksn_sum += ksn_diff_knickpoint_map[ending_node];
+          rksn_sum += ksn_ratio_knickpoint_map[ending_node];
+          rad_sum += ksn_rad_knickpoint_map[ending_node];
+
+          temp_pair = make_pair (begining_node,ending_node);
+          knickzone_WP_ksn[temp_pair] = weighted_sum_ksn;
+          knickzone_WP_rksn[temp_pair] = weighted_sum_rksn;
+          knickzone_WP_rad[temp_pair] = weighted_sum_rad;
+          knickzone_raw_cumul_ksn[temp_pair] = ksn_sum;
+          knickzone_raw_cumul_rksn[temp_pair] = rksn_sum;
+          knickzone_raw_cumul_rad[temp_pair] = rad_sum;
+          knickzone_ID[temp_pair] = this_knickzone_ID;
+
+        }
+
+      }
+      else
+      {
+        temp_pair = make_pair (begining_node,ending_node);
+        knickzone_WP_ksn[temp_pair] = ksn_diff_knickpoint_map[ending_node];
+        knickzone_WP_rksn[temp_pair] = ksn_ratio_knickpoint_map[ending_node];
+        knickzone_WP_rad[temp_pair] = ksn_rad_knickpoint_map[ending_node];
+        knickzone_raw_cumul_ksn[temp_pair] = ksn_diff_knickpoint_map[ending_node];
+        knickzone_raw_cumul_rksn[temp_pair] = ksn_ratio_knickpoint_map[ending_node];
+        knickzone_raw_cumul_rad[temp_pair] = ksn_rad_knickpoint_map[ending_node];
+        knickzone_ID[temp_pair] = this_knickzone_ID;
+      }
+
+      weighted_sum_rad = 0;
+      weighted_sum_ksn = 0;
+      weighted_sum_rksn = 0;
+      ksn_sum = 0;
+      rksn_sum = 0;
+      rad_sum = 0;
+      
+
+    }
+  this_knickzone_ID ++;
+  }
+  cout << "I am done testing all your knickzones combinations" << endl;
+} 
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Print data maps to file - knickpoint version
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::print_knickzone_to_csv(LSDFlowInfo& FlowInfo, string filename)
+{
+
+  // these are for extracting element-wise data from the channel profiles.
+  cout << "I am now writing your ksn knickpoint file:" << endl;
+  int A_node, B_node, row,col;
+  double Alatitude,Alongitude,Blatitude,Blongitude;
+  LSDCoordinateConverterLLandUTM Converter;
+
+  // find the number of nodes
+  int n_nodes = (node_sequence.size());
+
+  // open the data file
+  ofstream  chi_data_out;
+  chi_data_out.open(filename.c_str());
+  chi_data_out << "Alatitude,Alongitude,Blatitude,Blongitude,Aelevation,Belevation,Aflow_distance,Bflow_distance,Achi,Bchi,Adrainage_area,Bdrainage_area,ksn,rksn,sign,rad,Wgksn,Wgrksn,Wgrad,source_key,basin_key,knickzone_key,lenght";
+
+  chi_data_out << endl;
+
+  if (n_nodes <= 0)
+  {
+    cout << "Cannot print since you have not calculated channel properties yet." << endl;
+  }
+  else
+  {
+    map<pair<int,int>,float>::iterator iter;
+
+    for (iter = knickzone_raw_cumul_ksn.begin(); iter != knickzone_raw_cumul_ksn.end(); iter++)
+    {
+        A_node = iter->first.first;
+        B_node = iter->first.second;
+        FlowInfo.retrieve_current_row_and_col(A_node,row,col);
+        get_lat_and_long_locations(row, col, Alatitude, Alongitude, Converter);
+        FlowInfo.retrieve_current_row_and_col(B_node,row,col);
+        get_lat_and_long_locations(row, col, Blatitude, Blongitude, Converter);
+        // cout << "printing node " << this_node << " with diff " << ksn_diff_knickpoint_map[this_node] << endl; 
+        
+        chi_data_out.precision(9);
+        chi_data_out << Alatitude << ","
+                     << Alongitude << ","
+                     << Blatitude << ","
+                     << Blongitude << ",";
+        chi_data_out.precision(5);
+        chi_data_out << elev_data_map[A_node] << ","
+                     << elev_data_map[B_node] << ","
+                     << flow_distance_data_map[A_node] << ","
+                     << flow_distance_data_map[B_node] << ","
+                     << chi_data_map[A_node] << ","
+                     << chi_data_map[B_node] << ","
+                     << drainage_area_data_map[A_node] << ","
+                     << drainage_area_data_map[B_node] << ","
+                     << knickzone_raw_cumul_ksn[iter->first] << ","
+                     << knickzone_raw_cumul_rksn[iter->first] << ","
+                     << ksn_sign_knickpoint_map[A_node] << ","
+                     << knickzone_raw_cumul_rad[iter->first] << ","
+                     << knickzone_WP_ksn[iter->first] << ","
+                     << knickzone_WP_rksn[iter->first] << ","
+                     << knickzone_WP_rad[iter->first] << ","
+                     << source_keys_map[A_node] << ","
+                     << baselevel_keys_map[A_node]<< ","
+                     << knickzone_ID[iter->first] << ","
+                     << (chi_data_map[B_node]-chi_data_map[A_node]);
+        chi_data_out << endl;
+    }
+  }
+
+  chi_data_out.close();
+  cout << "I am done, your file is:" << endl;
+  cout << filename << endl;
+
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Print data maps to file - knickpoint version
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::print_knickpoint_to_csv(LSDFlowInfo& FlowInfo, string filename)
+{
+
+  // these are for extracting element-wise data from the channel profiles.
+  cout << "I am now writing your ksn knickzone file:" << endl;
+  int this_node, row,col;
+  double latitude,longitude, this_x, this_y;;
+  LSDCoordinateConverterLLandUTM Converter;
+
+  // find the number of nodes
+  int n_nodes = (node_sequence.size());
+
+  // open the data file
+  ofstream  chi_data_out;
+  chi_data_out.open(filename.c_str());
+  chi_data_out << "Y,X,latitude,longitude,elevation,flow_distance,chi,drainage_area,ksn,rksn,sign,rad,cumul_ksn,cumul_rksn,cumul_rad,source_key,basin_key";
+
+  chi_data_out << endl;
+
+
+
+
+  if (n_nodes <= 0)
+  {
+    cout << "Cannot print since you have not calculated channel properties yet." << endl;
+  }
+  else
+  {
+    map<int,float>::iterator iter;
+
+    for (iter = ksn_diff_knickpoint_map.begin(); iter != ksn_diff_knickpoint_map.end(); iter++)
+    {
+        this_node = iter->first;
         FlowInfo.retrieve_current_row_and_col(this_node,row,col);
         get_lat_and_long_locations(row, col, latitude, longitude, Converter);
-        if(kns_diff_knickpoint_map.count(this_node) == 1)
-        {
+        get_x_and_y_locations(row, col, this_x, this_y);
+        
         chi_data_out.precision(9);
-        chi_data_out << latitude << ","
+        chi_data_out << this_y << ","
+                     << this_x << ","
+                     << latitude << ","
                      << longitude << ",";
         chi_data_out.precision(5);
         chi_data_out << elev_data_map[this_node] << ","
                      << flow_distance_data_map[this_node] << ","
                      << chi_data_map[this_node] << ","
                      << drainage_area_data_map[this_node] << ","
-                     << kns_diff_knickpoint_map[this_node] << ","
-                     << kns_ratio_knickpoint_map[this_node] << ","
+                     << ksn_diff_knickpoint_map[this_node] << ","
+                     << ksn_ratio_knickpoint_map[this_node] << ","
                      << ksn_sign_knickpoint_map[this_node] << ","
+                     << ksn_rad_knickpoint_map[this_node] << ","
+                     << ksn_cumul_knickpoint_map[this_node] << ","
+                     << rksn_cumul_knickpoint_map[this_node] << ","
+                     << rad_cumul_knickpoint_map[this_node] << ","
                      << source_keys_map[this_node] << ","
                      << baselevel_keys_map[this_node];
-
         chi_data_out << endl;
-      }
     }
   }
 
@@ -2887,6 +5110,301 @@ float LSDChiTools::test_all_segment_collinearity_by_basin_using_points(LSDFlowIn
 
 
 
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// This function test the collinearity of all segments compared to a reference
+// segment
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+float LSDChiTools::test_collinearity_by_basin_disorder(LSDFlowInfo& FlowInfo,
+                                                 int baselevel_key)
+{
+  float disorder_stat = -9999;
+  
+  //cout << "Testing the segment collinearity for basin key " << baselevel_key << endl;
+  // get some information about the number of basins
+  int n_basins = int(ordered_baselevel_nodes.size());
+  if (baselevel_key >= n_basins)
+  {
+    cout << "Fatal error LSDChiTools::test_all_segment_collinearity_by_basin_disorder" <<endl;
+    cout << "You have selected a basin that doesn't exist!" << endl;
+    exit(EXIT_FAILURE);
+  }
+
+  
+  // Drop out if there is only a single channel in the basin
+  //if (n_channels == 1)
+  //{
+  //  cout << "This basin only has one channel." << endl;
+  //  return 1.0;
+  //}
+
+
+  // This is a brute force way to get the complete chi data map
+  
+  vector<float> this_basin_chi;
+  vector<float> this_basin_elevation;
+  int n_nodes = int(node_sequence.size());
+  int this_node;
+  for (int n = 0; n< n_nodes; n++)
+  {
+    this_node = node_sequence[n];
+
+    if (baselevel_keys_map[this_node] == baselevel_key)
+    {
+
+      this_basin_chi.push_back(chi_data_map[this_node]);
+      this_basin_elevation.push_back(elev_data_map[this_node]);
+    }
+  }
+  
+  // now sort these vectors
+    // initiate the sorted vectors
+  vector<float> chi_sorted;
+  vector<float> elev_sorted;
+  vector<size_t> index_map;
+
+  // sort the vectors
+  matlab_float_sort(this_basin_elevation, elev_sorted, index_map);
+  matlab_float_reorder(this_basin_chi, index_map, chi_sorted);
+  
+  // now calculate disorder
+  float chi_max = 0;
+  float chi_min = 10000;
+  float this_delta_chi = 0;
+  float sum_delta_chi = 0;
+  
+  int n_nodes_this_basin = int(chi_sorted.size());
+  for(int i = 0; i<n_nodes_this_basin-1; i++)
+  {
+    this_delta_chi = fabs(chi_sorted[i+1]-chi_sorted[i]);
+    sum_delta_chi+=this_delta_chi;
+    if(chi_sorted[i] > chi_max)
+    {
+      chi_max = chi_sorted[i];
+    }
+    if(chi_sorted[i] < chi_min)
+    {
+      chi_min = chi_sorted[i];
+    }
+  }
+  if(chi_sorted[n_nodes_this_basin-1] > chi_max)
+  {
+    chi_max = chi_sorted[n_nodes_this_basin-1];
+  }
+  float chi_range = chi_max-chi_min;
+  
+  disorder_stat = (sum_delta_chi - chi_range)/chi_range;
+
+  //cout << "Let me tell you all about the MLE values " << endl;
+  // for debugging
+  bool print_results = false;
+  if(print_results)
+  {
+    cout << "I need to code this up." << endl;
+  }
+
+  return disorder_stat;
+
+}
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// This function test the collinearity of all segments compared to a reference
+// segment
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+vector<float> LSDChiTools::test_collinearity_by_basin_disorder_with_uncert(LSDFlowInfo& FlowInfo,
+                                                 int baselevel_key)
+{
+  vector<float> disorder_stat_vec;
+  
+  //cout << "Testing the segment collinearity for basin key " << baselevel_key << endl;
+  // get some information about the number of basins
+  int n_basins = int(ordered_baselevel_nodes.size());
+  if (baselevel_key >= n_basins)
+  {
+    cout << "Fatal error LSDChiTools::test_all_segment_collinearity_by_basin_disorder" <<endl;
+    cout << "You have selected a basin that doesn't exist!" << endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // this map will hold references to the sources. There are two of them
+  // because the first has the sources as the keys and the second has the
+  // combination index as the keys. 
+  map<int,int> sources_are_keys;
+  map<int,int> comboindex_are_keys;
+  
+  vector<float> this_basin_chi;
+  vector<float> this_basin_elevation;
+  vector<int> this_basin_source;
+  int n_nodes = int(node_sequence.size());
+  int this_node;
+  int comboindex = 0;     // this is used to store an index into the combinations
+  for (int n = 0; n< n_nodes; n++)
+  {
+    this_node = node_sequence[n];
+
+    if (baselevel_keys_map[this_node] == baselevel_key)
+    {
+
+      this_basin_chi.push_back(chi_data_map[this_node]);
+      this_basin_elevation.push_back(elev_data_map[this_node]);
+      this_basin_source.push_back(source_keys_map[this_node]);
+      
+      // if the key doesn't exist, add a source key counter
+      if ( sources_are_keys.find( source_keys_map[this_node] ) == sources_are_keys.end() )
+      {
+        sources_are_keys[ source_keys_map[this_node] ] = comboindex;
+        comboindex++;
+      }
+    }
+  }
+  
+  // now do the second map by inverting the first map
+  for(map<int,int>::iterator iter =sources_are_keys.begin(); iter != sources_are_keys.end(); ++iter)
+  {
+    int k =  iter->first;
+    int v = iter->second;
+    comboindex_are_keys[v] = k;
+  }
+  
+  int n_sources = int(comboindex_are_keys.size());
+  //cout << "The number of channels are: " << n_sources << endl;
+  //cout << "The source node is: " << comboindex_are_keys[0] << endl;
+  
+  
+  // get the combinations
+  //cout << "Let me get some combinations for you." << endl;
+  int n_elements = n_sources-1;
+  int n_in_each_combo = 3;
+  
+  if (n_sources < n_in_each_combo)
+  {
+    cout << "Not enough channels in this basin! I am returning a nodata vector." << endl;
+    disorder_stat_vec.push_back(-9999);
+  }
+  else
+  {
+    // this gets the combinations
+    bool zero_indexed = false;
+    vector< vector<int> > combo_vecvec = combinations(n_elements, n_in_each_combo, zero_indexed);
+    
+    bool print_combinations = false;
+    if(print_combinations)
+    {
+      for (int i = 0; i< int(combo_vecvec.size()); i++)
+      {
+        for (int j = 0; j< int(combo_vecvec[i].size()); j++)
+        {
+          cout << combo_vecvec[i][j] << " ";
+        }
+        cout << endl;
+      }
+    }
+    int n_combinations = int(combo_vecvec.size());
+  
+    // now you enter the combinations loop
+    //int n_data_points = int(this_basin_source.size());
+    //cout << "Checking the combinations" << endl;
+    for (int combo = 0; combo<n_combinations; combo++)
+    {
+      vector<int> these_combos = combo_vecvec[combo];
+      vector<int> these_combo_sources;
+      
+      // add the trunk channel source
+      these_combo_sources.push_back(comboindex_are_keys[0]); 
+      //cout << 0 <<":" << comboindex_are_keys[0] << " ";
+      
+      for (int source_key = 0 ; source_key < int(these_combos.size()); source_key++)
+      {
+        these_combo_sources.push_back( comboindex_are_keys[ these_combos[source_key] ] );
+        //cout << these_combos[source_key] <<":" << comboindex_are_keys[ these_combos[source_key] ] << " ";
+      }
+      //cout << endl;
+      
+      
+      // now we sample and sort these vectors
+      vector<float> chi_combo;
+      vector<float> elev_combo;
+      vector<float> source_combo;
+      
+      for(int node = 0; node< int(this_basin_chi.size()); node++)
+      {
+        if(find(these_combo_sources.begin(), these_combo_sources.end(), this_basin_source[node]) != these_combo_sources.end()) 
+        {
+          chi_combo.push_back(this_basin_chi[node]);
+          elev_combo.push_back(this_basin_elevation[node]);
+        }
+      }
+        
+      // now you have the elevation and chi for this combination, sort them
+      // initiate the sorted vectors
+      vector<float> chi_sorted;
+      vector<float> elev_sorted;
+      vector<size_t> index_map;    
+  
+      // sort the vectors
+      matlab_float_sort(elev_combo, elev_sorted, index_map);
+      matlab_float_reorder(chi_combo, index_map, chi_sorted);
+        
+      // now calculate disorder
+      float chi_max = 0;
+      float chi_min = 10000;
+      float this_delta_chi = 0;
+      float sum_delta_chi = 0;
+      
+      int n_nodes_this_basin = int(chi_sorted.size());
+      for(int i = 0; i<n_nodes_this_basin-1; i++)
+      {
+        this_delta_chi = fabs(chi_sorted[i+1]-chi_sorted[i]);
+        sum_delta_chi+=this_delta_chi;
+        if(chi_sorted[i] > chi_max)
+        {
+          chi_max = chi_sorted[i];
+        }
+        if(chi_sorted[i] < chi_min)
+        {
+          chi_min = chi_sorted[i];
+        }
+      }
+      if(chi_sorted[n_nodes_this_basin-1] > chi_max)
+      {
+        chi_max = chi_sorted[n_nodes_this_basin-1];
+      }
+      float chi_range = chi_max-chi_min;
+        
+      float disorder_stat = (sum_delta_chi - chi_range)/chi_range;
+      disorder_stat_vec.push_back(disorder_stat);
+    }
+  }
+
+
+  // for debugging
+  bool print_results = false;
+  if(print_results)
+  {
+    cout << "Disorder stats for all the combinations are: " << endl;
+    for(int i = 0; i< int(disorder_stat_vec.size()); i++)
+    {
+      cout << disorder_stat_vec[i] << " ";
+    }
+    cout << endl;
+    cout << "I'm returning the disorder stat vector." << endl;
+  }
+  
+
+  return disorder_stat_vec;
+
+}
+
+
+
+
+
+
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // This function test the collinearity of all segments compared to a reference
 // segment
@@ -3597,8 +6115,6 @@ void LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_with_dischar
 
 
 
-
-
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // This function test the collinearity of all segments compared to a reference
 // segment
@@ -3846,6 +6362,695 @@ void LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_using_points
 
 
 
+
+
+
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// This function test the collinearity of all segments compared to a reference
+// segment
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_with_discharge_using_points_MC(LSDFlowInfo& FlowInfo, LSDJunctionNetwork& JN,
+                        float start_movern, float delta_movern, int n_movern,
+                        bool only_use_mainstem_as_reference,
+                        string file_prefix, float sigma,
+                        int n_fracs,
+                        int MC_iterations,
+                        float max_frac, LSDRaster& Discharge)
+{
+  // these vectors store all the values which are then used for printing
+  vector< vector<float> > min_MLE, first_quartile_MLE, median_MLE, third_quartile_MLE, max_MLE;
+
+  // open the file that contains the basin stats
+  string filename_bstats = file_prefix+"_points_MC_basinstats_Q.csv";
+  ofstream stats_by_basin_out;
+  stats_by_basin_out.open(filename_bstats.c_str());
+
+  // get the see for the random number generator
+  long seed = time(NULL);
+
+  vector< vector<float> > RMSE_vecvec;
+  vector< vector<float> > MLE_vecvec;
+  vector< vector<float> > total_MLE_vecvec;
+  vector<int> reference_keys;
+  vector<int> test_keys;
+  vector<int> outlet_jns;
+
+  //cout << "LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern" << endl;
+  //cout << "I am defaulting to A_0 = 1." << endl;
+  vector<float> movern;
+  float A_0 = 1;
+
+  int n_basins = int(ordered_baselevel_nodes.size());
+
+  // get the outlet junction of each basin key
+  for (int basin_key = 0; basin_key < n_basins; basin_key++)
+  {
+    int outlet_node = ordered_baselevel_nodes[basin_key];
+    int outlet_jn = JN.get_Junction_of_Node(outlet_node, FlowInfo);
+    outlet_jns.push_back(outlet_jn);
+  }
+
+  cout << endl << endl << "==========================" << endl;
+  for(int i = 0; i< n_movern; i++)
+  {
+    // get the m over n value
+    movern.push_back( float(i)*delta_movern+start_movern );
+    cout << "i: " << i << " and m over n: " << movern[i] << " ";
+
+    // calculate chi
+    float area_threshold = 0;
+    LSDRaster this_chi = FlowInfo.get_upslope_chi_from_all_baselevel_nodes(movern[i], A_0,
+                                 area_threshold, Discharge);
+    update_chi_data_map(FlowInfo, this_chi);
+
+    // get some vecvecs for storing information about the sources, MLEs, etc
+    // for each iteration
+    vector<int> master_reference_sources, master_test_sources, master_basin_keys;
+    vector< vector<float> > total_MLE_iteration;
+
+    for (int iteration = 0; iteration < MC_iterations; iteration++)
+    {
+
+      // these are the vectors that will hold the information about the
+      // comparison between channels.
+      // the _all vectors are one of all the basins
+      // reference source is the source key of the reference channel
+      vector<int> reference_source, all_reference_source;
+      // test source is the source key of the test channel
+      vector<int> test_source, all_test_source;
+      // MLE the maximum liklihood estimator
+      vector<float> MLE_values, all_MLE_values;
+      // RMSE is the root mean square error
+      vector<float> RMSE_values, all_RMSE_values;
+
+      vector<float> tot_MLE_vec;
+      // basin keys
+      vector<int> all_basin_keys;
+
+      // now run the collinearity test
+      float tot_MLE;
+
+      // here we need the logic for the chi_fractions
+      float partition_size = max_frac/float(n_fracs);
+      vector<float> chi_fractions_vector;
+      for(int partition = 0; partition < n_fracs; partition++)
+      {
+        float this_part = ran3(&seed)*partition_size;
+        //cout << "This part is: " << this_part << endl;
+
+        chi_fractions_vector.push_back( float(partition)*partition_size + this_part );
+        //cout << "Partion["<< partition << "]: " << chi_fractions_vector[partition] << endl;
+      }
+
+
+      for(int basin_key = 0; basin_key<n_basins; basin_key++)
+      {
+        //cout << "The sigma is: " << sigma << endl;
+        tot_MLE = test_all_segment_collinearity_by_basin_using_points(FlowInfo, only_use_mainstem_as_reference,
+                                    basin_key,
+                                    reference_source, test_source, MLE_values, RMSE_values, sigma,
+                                    chi_fractions_vector);
+        // concatenate the vectors to the "all" vectors
+        all_reference_source.insert(all_reference_source.end(), reference_source.begin(), reference_source.end() );
+        all_test_source.insert(all_test_source.end(), test_source.begin(), test_source.end() );
+        all_MLE_values.insert(all_MLE_values.end(), MLE_values.begin(), MLE_values.end() );
+        all_RMSE_values.insert(all_RMSE_values.end(), RMSE_values.begin(), RMSE_values.end() );
+        all_basin_keys.insert(all_basin_keys.end(), reference_source.size(), basin_key);
+
+        tot_MLE_vec.push_back(tot_MLE);
+        //cout << "basin: " << basin_key << " and tot_MLE: " << tot_MLE << endl;
+      }
+
+      // so we end up with vectors containing the MLE values for each source,
+      // the RMSE, the reference and test sources, and the basin keys.
+
+      // add the data to the vecvecs
+      MLE_vecvec.push_back(all_MLE_values);
+      RMSE_vecvec.push_back(all_RMSE_values);
+      total_MLE_vecvec.push_back(tot_MLE_vec);
+      reference_keys = all_reference_source;
+      test_keys = all_test_source;
+
+      // if this is the first iteration, push the reference, test, and basin keys vector
+      // into the master vector
+      if(iteration == 0)
+      {
+        master_reference_sources = all_reference_source;
+        master_test_sources = all_test_source;
+        master_basin_keys = master_basin_keys;
+      }
+      else
+      {
+        // check to see if the sources vectors are the same size
+        if (master_reference_sources != all_reference_source)
+        {
+          cout << "LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_with_discharge_using_points_MC" << endl;
+          cout << "We have a problem with the source vector, buddy!" << endl;
+        }
+      }
+
+      // in this space we will need logic for storing all the MLE data and RMSE data
+      // for each iteration and each basin. I'll save that work for later.
+
+
+      // now get the total MLE vec for each iteration
+      total_MLE_iteration.push_back(tot_MLE_vec);
+    }
+
+    // now for this m/n, we need to calculate the stats of the MLEs
+    // this is a little slow since we need to reorganise the data in vecotrs
+    // by repeatedly looping over the vecvec
+    vector<float> this_movern_min_MLE;
+    vector<float> this_movern_first_quartile_MLE;
+    vector<float> this_movern_median_MLE;
+    vector<float> this_movern_third_quartile_MLE;
+    vector<float> this_movern_max_MLE;
+
+    for(int basin_key = 0; basin_key<n_basins; basin_key++)
+    {
+      vector<float> this_basins_MLE;
+      for(int iteration = 0; iteration < MC_iterations; iteration ++)
+      {
+        this_basins_MLE.push_back( total_MLE_iteration[iteration][basin_key] );
+      }
+
+      vector<float> descriptive_stats_MLE =  calculate_descriptive_stats(this_basins_MLE);
+
+      this_movern_min_MLE.push_back(descriptive_stats_MLE[0]);
+      this_movern_first_quartile_MLE.push_back(descriptive_stats_MLE[1]);
+      this_movern_median_MLE.push_back(descriptive_stats_MLE[2]);
+      this_movern_third_quartile_MLE.push_back(descriptive_stats_MLE[3]);
+      this_movern_max_MLE.push_back(descriptive_stats_MLE[4]);
+    }
+
+    // push the data for this m/n into the vecvecs
+    min_MLE.push_back(this_movern_min_MLE);
+    first_quartile_MLE.push_back(this_movern_first_quartile_MLE);
+    median_MLE.push_back(this_movern_median_MLE);
+    third_quartile_MLE.push_back(this_movern_third_quartile_MLE);
+    max_MLE.push_back(this_movern_max_MLE);
+
+    // open the outfile
+    string filename_fullstats = file_prefix+"_"+dtoa(movern[i])+"_pointsMC_Q.csv";
+    ofstream movern_stats_out;
+    movern_stats_out.open(filename_fullstats.c_str());
+
+    // now print the data to the file
+    movern_stats_out << "basin_number,minimum_MLE,first_quartile_MLE,median_MLE,third_quartile_MLE,maximum_MLE" << endl;
+    for(int basin_key = 0; basin_key<n_basins; basin_key++)
+    {
+      movern_stats_out << basin_key << ","
+                       << this_movern_min_MLE[basin_key] << ","
+                       << this_movern_first_quartile_MLE[basin_key] << ","
+                       << this_movern_median_MLE[basin_key] << ","
+                       << this_movern_third_quartile_MLE[basin_key] << ","
+                       << this_movern_max_MLE[basin_key] << endl;
+    }
+    movern_stats_out.close();
+  }
+
+
+  stats_by_basin_out << "basin_key,outlet_jn";
+  stats_by_basin_out.precision(4);
+  for(int i = 0; i< n_movern; i++)
+  {
+    stats_by_basin_out << ",median_MLE_m_over_n="<<movern[i];
+  }
+  for(int i = 0; i< n_movern; i++)
+  {
+    stats_by_basin_out << ",FQ_MLE_m_over_n="<<movern[i];
+  }
+  for(int i = 0; i< n_movern; i++)
+  {
+    stats_by_basin_out << ",TQ_MLE_m_over_n="<<movern[i];
+  }
+  stats_by_basin_out << endl;
+  stats_by_basin_out.precision(9);
+  for(int basin_key = 0; basin_key<n_basins; basin_key++)
+  {
+    stats_by_basin_out << basin_key << "," << outlet_jns[basin_key];
+    for(int i = 0; i< n_movern; i++)
+    {
+      stats_by_basin_out << "," <<median_MLE[i][basin_key];
+    }
+    for(int i = 0; i< n_movern; i++)
+    {
+      stats_by_basin_out << "," <<first_quartile_MLE[i][basin_key];
+    }
+    for(int i = 0; i< n_movern; i++)
+    {
+      stats_by_basin_out << "," <<third_quartile_MLE[i][basin_key];
+    }
+    stats_by_basin_out << endl;
+  }
+
+  stats_by_basin_out.close();
+
+}
+
+
+
+
+
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// This functions test the goodness of fit for the m/n ratio using the 
+// disorder method propsoed by Hergarten et al 2016
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_using_disorder(LSDFlowInfo& FlowInfo, LSDJunctionNetwork& JN,
+                        float start_movern, float delta_movern, int n_movern,
+                        string file_prefix, bool use_uncert)
+{
+  cout << "I am now entering the disorder loop." << endl;
+
+  int n_basins = int(ordered_baselevel_nodes.size());
+  
+  // some parameters to be stored in vectors
+  cout << "LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_using_disorder" << endl;
+  cout << "I am defaulting to A_0 = 1." << endl;
+  vector<int> outlet_jns;
+  vector<float> movern;
+  float A_0 = 1;  
+  
+  vector< vector<float> > disorder_vecvec;
+  
+
+  // get the outlet junction of each basin key
+  for (int basin_key = 0; basin_key < n_basins; basin_key++)
+  {
+    int outlet_node = ordered_baselevel_nodes[basin_key];
+    int outlet_jn = JN.get_Junction_of_Node(outlet_node, FlowInfo);
+    outlet_jns.push_back(outlet_jn);
+  }
+  
+  
+  // We do the full disorder statistic first
+  cout << "I am calculating the disorder statistic!" << endl;
+  
+  vector<float> emptyvec;
+  for(int i = 0; i< n_movern; i++)
+  {
+    // get the m over n value
+    movern.push_back( float(i)*delta_movern+start_movern );
+    //cout << "i: " << i << " and m over n: " << movern[i] << " ";
+
+    vector<float> these_disorders;
+
+    // open the outfile
+    string filename_fullstats = file_prefix+"_"+dtoa(movern[i])+"_fullstats_disorder.csv";
+    //ofstream movern_stats_out;
+    //movern_stats_out.open(filename_fullstats.c_str());
+
+    // calculate chi
+    float area_threshold = 0;
+
+    LSDRaster this_chi = FlowInfo.get_upslope_chi_from_all_baselevel_nodes(movern[i], A_0,
+                                 area_threshold);
+    update_chi_data_map(FlowInfo, this_chi);
+
+    // these are the vectors that will hold the information about the disorder by basin
+    vector<float> tot_MLE_vec;
+
+    // now run the collinearity test
+    float disorder_stat;
+
+    //for(int basin_key = 0; basin_key<1; basin_key++)
+    for(int basin_key = 0; basin_key<n_basins; basin_key++)
+    {
+      //disorder_stat = test_all_segment_collinearity_by_basin_using_disorder(FlowInfo, basin_key);
+      disorder_stat = test_collinearity_by_basin_disorder(FlowInfo, basin_key);
+      cout << "basin: " << basin_key << " and m/n is: " << movern[i] << " and disorder stat is: " << disorder_stat << endl;
+      these_disorders.push_back(disorder_stat);
+    }
+    disorder_vecvec.push_back(these_disorders);
+    
+  }
+  
+  // now we need to loop through the vecvec getting the minimum disorder for each basin
+  map<int,float> best_fit_movern_disorder_map;
+  for(int basin_key = 0; basin_key<n_basins; basin_key++)
+  {
+    vector<float> these_disorders;
+    float min_disorder = 1000000000000; // a big number since the disorder needs to be smaller than this.  
+    best_fit_movern_disorder_map[basin_key] = -9999; 
+    for(int i = 0; i< n_movern; i++)
+    {
+      // check to see if this disorder is a minimum for this basin
+      if (disorder_vecvec[i][basin_key] < min_disorder)
+      {
+        min_disorder = disorder_vecvec[i][basin_key];
+        best_fit_movern_disorder_map[basin_key] = movern[i]; 
+      }
+    }
+  }
+  
+
+  // open the file that contains the basin stats
+  string filename_bstats = file_prefix+"_disorder_basinstats.csv";
+  ofstream stats_by_basin_out;
+  stats_by_basin_out.open(filename_bstats.c_str());
+
+  stats_by_basin_out << "basin_key,outlet_jn";
+  stats_by_basin_out.precision(4);
+  for(int i = 0; i< n_movern; i++)
+  {
+    stats_by_basin_out << ",m_over_n = "<<movern[i];
+  }
+  stats_by_basin_out << endl;
+  stats_by_basin_out.precision(9);
+  for(int basin_key = 0; basin_key<n_basins; basin_key++)
+  {
+    stats_by_basin_out << basin_key << "," << outlet_jns[basin_key];
+    for(int i = 0; i< n_movern; i++)
+    {
+      stats_by_basin_out << "," <<disorder_vecvec[i][basin_key];
+    }
+    stats_by_basin_out << endl;
+  }
+  stats_by_basin_out.close();
+  
+  
+  // Now if the use uncertainty flag is true, calculate the disorder statistics. 
+  if (use_uncert)
+  {
+    // first initiate the vectors for holding the combination vecs.
+    // the key is the basin number. Each element will hold the m over n value
+    // with the lowest disorder
+    map<int, vector<float> > best_fit_movern_for_basins;
+    map<int, vector<float> > lowest_disorder_for_basins;
+
+    for(int i = 0; i< n_movern; i++)
+    {
+      // get the m over n value
+      float this_movern = float(i)*delta_movern+start_movern;
+      movern.push_back( this_movern );
+      cout << "i: " << i << " and m over n: " << movern[i] << endl;
+
+      // calculate chi
+      float area_threshold = 0;
+  
+      LSDRaster this_chi = FlowInfo.get_upslope_chi_from_all_baselevel_nodes(movern[i], A_0,
+                                   area_threshold);
+      update_chi_data_map(FlowInfo, this_chi);
+      
+      // now loop through basins
+      //for(int basin_key = 0; basin_key<1; basin_key++)
+      for(int basin_key = 0; basin_key<n_basins; basin_key++)
+      {
+        cout << "Testing uncert the basin key is " << basin_key << endl;
+        vector<float> disorder_stats = test_collinearity_by_basin_disorder_with_uncert(FlowInfo, basin_key);
+        
+        // if this is the first m over n value, then initiate the vectors for this basin key
+        if (i == 0)
+        {
+          lowest_disorder_for_basins[basin_key] = disorder_stats;
+          
+          int n_combos_this_basin = int(disorder_stats.size());
+          vector<float> best_fit_movern;
+          for(int bf = 0; bf < n_combos_this_basin; bf++)
+          {
+            best_fit_movern.push_back( this_movern );
+          }
+          best_fit_movern_for_basins[basin_key] = best_fit_movern;
+        }
+        else
+        {
+          // loop through all the combos and get the best fit movern
+          vector<float> existing_lowest_disorder = lowest_disorder_for_basins[basin_key];
+          vector<float> existing_best_fit_movern = best_fit_movern_for_basins[basin_key];
+          int n_combos_this_basin = int(disorder_stats.size());
+          
+          for(int bf = 0; bf < n_combos_this_basin; bf++)
+          {
+            if (existing_lowest_disorder[bf] > disorder_stats[bf] )
+            {
+              existing_lowest_disorder[bf] = disorder_stats[bf];
+              existing_best_fit_movern[bf] = this_movern;
+            }
+          }
+          lowest_disorder_for_basins[basin_key] = existing_lowest_disorder;
+          best_fit_movern_for_basins[basin_key] = existing_best_fit_movern;
+        }
+      }  // end basin loop
+    }    // end m/n loop
+    
+
+    // open the outfile
+    string filename_fullstats = file_prefix+"_fullstats_disorder_uncert.csv";
+    ofstream stats_by_basin_out;
+    stats_by_basin_out.open(filename_fullstats.c_str());
+  
+    stats_by_basin_out << "basin_key,N_combinations,minimum,first_quartile,median,third_quartile,maximum,mean,standard_deviation,standard_error,MAD, best_fit_for_all_tribs" << endl;
+    stats_by_basin_out.precision(8);
+    for(int basin_key = 0; basin_key<n_basins; basin_key++)
+    {
+      vector<float> these_movern = best_fit_movern_for_basins[basin_key];
+      int n_combinations =  int(these_movern.size());
+      
+      vector<float> these_stats = calculate_descriptive_stats(these_movern);
+      stats_by_basin_out << basin_key << ",";
+      stats_by_basin_out << n_combinations << ",";
+      stats_by_basin_out << these_stats[0] <<",";
+      stats_by_basin_out << these_stats[1] <<",";
+      stats_by_basin_out << these_stats[2] <<",";
+      stats_by_basin_out << these_stats[3] <<",";
+      stats_by_basin_out << these_stats[4] <<",";
+      stats_by_basin_out << these_stats[5] <<",";
+      stats_by_basin_out << these_stats[6] <<",";
+      stats_by_basin_out << these_stats[7] <<",";
+      stats_by_basin_out << these_stats[8] <<",";
+      stats_by_basin_out << best_fit_movern_disorder_map[basin_key] << endl;
+    }
+    stats_by_basin_out.close();
+  }
+}
+
+
+
+
+
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// This functions test the goodness of fit for the concavity using the 
+// disorder method propsoed by Hergarten et al 2016
+// Uses a discharge raster
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_with_discharge_using_disorder(LSDFlowInfo& FlowInfo, LSDJunctionNetwork& JN,
+                        float start_movern, float delta_movern, int n_movern,
+                        string file_prefix, bool use_uncert, LSDRaster& Discharge)
+{
+  cout << "I am now entering the disorder loop." << endl;
+
+  int n_basins = int(ordered_baselevel_nodes.size());
+  
+  // some parameters to be stored in vectors
+  cout << "LSDChiTools::calculate_goodness_of_fit_collinearity_fxn_movern_using_disorder" << endl;
+  cout << "I am defaulting to A_0 = 1." << endl;
+  vector<int> outlet_jns;
+  vector<float> movern;
+  float A_0 = 1;  
+  
+  vector< vector<float> > disorder_vecvec;
+  
+
+  // get the outlet junction of each basin key
+  for (int basin_key = 0; basin_key < n_basins; basin_key++)
+  {
+    int outlet_node = ordered_baselevel_nodes[basin_key];
+    int outlet_jn = JN.get_Junction_of_Node(outlet_node, FlowInfo);
+    outlet_jns.push_back(outlet_jn);
+  }
+  
+  
+  // We do the full disorder statistic first
+  cout << "I am calculating the disorder statistic!" << endl;
+  
+  vector<float> emptyvec;
+  for(int i = 0; i< n_movern; i++)
+  {
+    // get the m over n value
+    movern.push_back( float(i)*delta_movern+start_movern );
+    //cout << "i: " << i << " and m over n: " << movern[i] << " ";
+
+    vector<float> these_disorders;
+
+    // open the outfile
+    string filename_fullstats = file_prefix+"_"+dtoa(movern[i])+"_fullstatsq_disorder.csv";
+    //ofstream movern_stats_out;
+    //movern_stats_out.open(filename_fullstats.c_str());
+
+    // calculate chi
+    float area_threshold = 0;
+    LSDRaster this_chi = FlowInfo.get_upslope_chi_from_all_baselevel_nodes(movern[i], A_0,
+                                 area_threshold, Discharge);
+    update_chi_data_map(FlowInfo, this_chi);
+
+    // these are the vectors that will hold the information about the disorder by basin
+    vector<float> tot_MLE_vec;
+
+    // now run the collinearity test
+    float disorder_stat;
+
+    //for(int basin_key = 0; basin_key<1; basin_key++)
+    for(int basin_key = 0; basin_key<n_basins; basin_key++)
+    {
+      //disorder_stat = test_all_segment_collinearity_by_basin_using_disorder(FlowInfo, basin_key);
+      disorder_stat = test_collinearity_by_basin_disorder(FlowInfo, basin_key);
+      cout << "basin: " << basin_key << " and m/n is: " << movern[i] << " and disorder stat is: " << disorder_stat << endl;
+      these_disorders.push_back(disorder_stat);
+    }
+    disorder_vecvec.push_back(these_disorders);
+    
+  }
+  
+  // now we need to loop through the vecvec getting the minimum disorder for each basin
+  map<int,float> best_fit_movern_disorder_map;
+  for(int basin_key = 0; basin_key<n_basins; basin_key++)
+  {
+    vector<float> these_disorders;
+    float min_disorder = 1000000000000; // a big number since the disorder needs to be smaller than this.  
+    best_fit_movern_disorder_map[basin_key] = -9999; 
+    for(int i = 0; i< n_movern; i++)
+    {
+      // check to see if this disorder is a minimum for this basin
+      if (disorder_vecvec[i][basin_key] < min_disorder)
+      {
+        min_disorder = disorder_vecvec[i][basin_key];
+        best_fit_movern_disorder_map[basin_key] = movern[i]; 
+      }
+    }
+  }
+  
+
+  // open the file that contains the basin stats
+  string filename_bstats = file_prefix+"_disorder_basinstats.csv";
+  ofstream stats_by_basin_out;
+  stats_by_basin_out.open(filename_bstats.c_str());
+
+  stats_by_basin_out << "basin_key,outlet_jn";
+  stats_by_basin_out.precision(4);
+  for(int i = 0; i< n_movern; i++)
+  {
+    stats_by_basin_out << ",m_over_n = "<<movern[i];
+  }
+  stats_by_basin_out << endl;
+  stats_by_basin_out.precision(9);
+  for(int basin_key = 0; basin_key<n_basins; basin_key++)
+  {
+    stats_by_basin_out << basin_key << "," << outlet_jns[basin_key];
+    for(int i = 0; i< n_movern; i++)
+    {
+      stats_by_basin_out << "," <<disorder_vecvec[i][basin_key];
+    }
+    stats_by_basin_out << endl;
+  }
+  stats_by_basin_out.close();
+  
+  
+  // Now if the use uncertainty flag is true, calculate the disorder statistics. 
+  if (use_uncert)
+  {
+    // first initiate the vectors for holding the combination vecs.
+    // the key is the basin number. Each element will hold the m over n value
+    // with the lowest disorder
+    map<int, vector<float> > best_fit_movern_for_basins;
+    map<int, vector<float> > lowest_disorder_for_basins;
+
+    for(int i = 0; i< n_movern; i++)
+    {
+      // get the m over n value
+      float this_movern = float(i)*delta_movern+start_movern;
+      movern.push_back( this_movern );
+      cout << "i: " << i << " and m over n: " << movern[i] << endl;
+
+      // calculate chi
+      float area_threshold = 0;
+  
+      LSDRaster this_chi = FlowInfo.get_upslope_chi_from_all_baselevel_nodes(movern[i], A_0,
+                                   area_threshold);
+      update_chi_data_map(FlowInfo, this_chi);
+      
+      // now loop through basins
+      //for(int basin_key = 0; basin_key<1; basin_key++)
+      for(int basin_key = 0; basin_key<n_basins; basin_key++)
+      {
+        cout << "Testing uncert the basin key is " << basin_key << endl;
+        vector<float> disorder_stats = test_collinearity_by_basin_disorder_with_uncert(FlowInfo, basin_key);
+        
+        // if this is the first m over n value, then initiate the vectors for this basin key
+        if (i == 0)
+        {
+          lowest_disorder_for_basins[basin_key] = disorder_stats;
+          
+          int n_combos_this_basin = int(disorder_stats.size());
+          vector<float> best_fit_movern;
+          for(int bf = 0; bf < n_combos_this_basin; bf++)
+          {
+            best_fit_movern.push_back( this_movern );
+          }
+          best_fit_movern_for_basins[basin_key] = best_fit_movern;
+        }
+        else
+        {
+          // loop through all the combos and get the best fit movern
+          vector<float> existing_lowest_disorder = lowest_disorder_for_basins[basin_key];
+          vector<float> existing_best_fit_movern = best_fit_movern_for_basins[basin_key];
+          int n_combos_this_basin = int(disorder_stats.size());
+          
+          for(int bf = 0; bf < n_combos_this_basin; bf++)
+          {
+            if (existing_lowest_disorder[bf] > disorder_stats[bf] )
+            {
+              existing_lowest_disorder[bf] = disorder_stats[bf];
+              existing_best_fit_movern[bf] = this_movern;
+            }
+          }
+          lowest_disorder_for_basins[basin_key] = existing_lowest_disorder;
+          best_fit_movern_for_basins[basin_key] = existing_best_fit_movern;
+        }
+      }  // end basin loop
+    }    // end m/n loop
+    
+
+    // open the outfile
+    string filename_fullstats = file_prefix+"_fullstats_disorder_uncert.csv";
+    ofstream stats_by_basin_out;
+    stats_by_basin_out.open(filename_fullstats.c_str());
+  
+    stats_by_basin_out << "basin_key,N_combinations,minimum,first_quartile,median,third_quartile,maximum,mean,standard_deviation,standard_error,MAD, best_fit_for_all_tribs" << endl;
+    stats_by_basin_out.precision(8);
+    for(int basin_key = 0; basin_key<n_basins; basin_key++)
+    {
+      vector<float> these_movern = best_fit_movern_for_basins[basin_key];
+      int n_combinations =  int(these_movern.size());
+      
+      vector<float> these_stats = calculate_descriptive_stats(these_movern);
+      stats_by_basin_out << basin_key << ",";
+      stats_by_basin_out << n_combinations << ",";
+      stats_by_basin_out << these_stats[0] <<",";
+      stats_by_basin_out << these_stats[1] <<",";
+      stats_by_basin_out << these_stats[2] <<",";
+      stats_by_basin_out << these_stats[3] <<",";
+      stats_by_basin_out << these_stats[4] <<",";
+      stats_by_basin_out << these_stats[5] <<",";
+      stats_by_basin_out << these_stats[6] <<",";
+      stats_by_basin_out << these_stats[7] <<",";
+      stats_by_basin_out << these_stats[8] <<",";
+      stats_by_basin_out << best_fit_movern_disorder_map[basin_key] << endl;
+    }
+    stats_by_basin_out.close();
+  }
+}
 
 
 
@@ -4583,6 +7788,33 @@ int LSDChiTools::get_starting_node_of_source(int source_key)
   return this_starting_node;
 }
 
+
+int LSDChiTools::get_ending_node_of_source(LSDFlowInfo& FlowInfo,int source_key)
+{
+  int starting_node_index = get_starting_node_of_source(source_key);
+  int node_indenter = starting_node_index;
+  int temp1, temp2, temp_node_index = starting_node_index, temp_node = node_sequence[starting_node_index];
+  int n = node_sequence.size();
+
+  
+
+  while(source_keys_map[temp_node] == source_key && temp_node_index < n)
+  {
+
+    node_indenter ++;
+    temp_node_index = node_indenter;
+    FlowInfo.retrieve_receiver_information(node_sequence[temp_node_index], temp_node, temp1, temp2);
+
+    
+
+  }
+  int ending_node = temp_node;
+
+
+  return ending_node;
+
+}
+
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Gets the number of channels
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -5079,8 +8311,8 @@ void LSDChiTools::get_slope_area_data(LSDFlowInfo& FlowInfo, float vertical_inte
   //float midpoint_area;
   float upstream_elevation;
   float upstream_flow_distance;
-  float downstream_elevation;
-  float downstream_flow_distance;
+  float downstream_elevation = 0;  // need to set these to avoid compiler warning
+  float downstream_flow_distance = 0;
   float midpoint_node;
   float target_end_interval_elevation;
   float target_midpoint_interval_elevation;
@@ -5654,7 +8886,7 @@ void LSDChiTools::segment_binned_slope_area_data(LSDFlowInfo& FlowInfo,
 
   // this holds the source numbers for each basin
   vector<int> basins_with_data;
-  int last_basin;
+  int last_basin = 0; // I am initializing last basin to 0 to avoid warnings. 13/11/2017 (if something break after that.) Boris
   map<int, vector<int> > basin_and_sources_map;
 
   // loop through all the source nodes
@@ -5665,7 +8897,7 @@ void LSDChiTools::segment_binned_slope_area_data(LSDFlowInfo& FlowInfo,
 
     //cout << "The source key is: " << this_source_key << endl;
     // Initiate the last basin
-    last_basin = basin_key_of_this_source_map[this_source_key];
+    //last_basin = basin_key_of_this_source_map[this_source_key];
 
     // extract the log S-log A data for this source
     vector<float> log_area = log_area_map[this_source_key];
@@ -6099,6 +9331,41 @@ void LSDChiTools::print_data_maps_to_file_full(LSDFlowInfo& FlowInfo, string fil
 
 }
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
+
+
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Print data maps to file
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+void LSDChiTools::print_intersources_mchi_map( string filename)
+{
+
+  // open the data file
+  ofstream  file_out_;
+  file_out_.open(filename.c_str());
+  file_out_ << "source_key,receiving_source_key,m_chi,chi";
+  file_out_ << endl;
+
+ 
+  for (map<int,int>::iterator alpaca = map_source_key_receiver.begin(); alpaca != map_source_key_receiver.end() ; alpaca++)
+  {
+    file_out_.precision(5);
+    file_out_ << alpaca->first << ","
+                 << alpaca->second << ","
+                 << map_source_key_receiver_mchi[alpaca->first]
+                 << M_chi_data_map[alpaca->first]
+                 << chi_data_map[alpaca->first];
+    file_out_ << endl;
+  }
+  
+
+  file_out_.close();
+
+}
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Development function to Print data maps to file including knickpoints

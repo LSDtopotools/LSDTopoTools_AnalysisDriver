@@ -129,6 +129,16 @@ int main (int nNumberofArgs,char *argv[])
   bool_default_map["print_profile_curvature"]= false;
   bool_default_map["print_tangential_curvature"]= false;
   bool_default_map["print_point_classification"]= false;
+  bool_default_map["print_directional_gradients"] = false;
+  
+  // Roughness calculations
+  float_default_map["REI_critical_slope"] = 1.0;
+  float_default_map["REI_window_radius"] = 10;
+  bool_default_map["print_REI_raster"] = false;
+  
+  bool_default_map["print_roughness_rasters"] = false;
+  float_default_map["roughness_radius"] = 3;
+  
   
 
   // filling and drainage area
@@ -169,7 +179,15 @@ int main (int nNumberofArgs,char *argv[])
   // The wiener filter
   bool_default_map["print_wiener_filtered_raster"] = false;
  
+  // This burns a raster value to any csv output of chi data
+  // Useful for appending geology data to chi profiles
+  bool_default_map["burn_raster_to_csv"] = false;
+  string_default_map["burn_raster_prefix"] = "NULL";
+  string_default_map["burn_data_csv_column_header"] = "burned_data";
+  string_default_map["csv_to_burn_name"] = "NULL";
 
+  // This is for junction angles
+  bool_default_map["print_junction_angles_to_csv"] = false;
 
   // Use the parameter parser to get the maps of the parameters required for the
   // analysis
@@ -235,6 +253,68 @@ int main (int nNumberofArgs,char *argv[])
 
 
   //============================================================================
+  // Raster burning
+
+  // if this gets burned, do it
+  if(this_bool_map["burn_raster_to_csv"])
+  {
+    cout << "You asked me to burn a raster to a csv." << endl;
+    cout << "WARNING: This was written in a hurry and has no bug checking." << endl;
+    cout << "If you have the wrong filenames it will crash." << endl;
+    
+    cout << "First I am going to load the raster." << endl;
+    string burn_raster_name;
+    bool burn_raster_exists = true;
+    if (this_string_map["burn_raster_prefix"] != "NULL")
+    {
+      burn_raster_name = DATA_DIR+this_string_map["burn_raster_prefix"];
+      cout << "I will burn data from the raster: " << burn_raster_name << endl;
+    }
+    else
+    {
+      burn_raster_exists = false;
+      cout << "You don't have a working burn raster." << endl;
+    }
+    
+    if(burn_raster_exists)
+    {
+      LSDRaster BurnRaster(burn_raster_name,raster_ext);
+      
+      string header_for_burn_data;
+      header_for_burn_data = this_string_map["burn_data_csv_column_header"];
+      
+      cout << "I am burning the raster into the column header " << header_for_burn_data << endl;
+      
+      string full_csv_name = DATA_DIR+this_string_map["csv_to_burn_name"];
+      cout << "I am burning the raster to the csv file." << full_csv_name << endl;
+      LSDSpatialCSVReader CSVFile(RI,full_csv_name);
+
+      CSVFile.burn_raster_data_to_csv(BurnRaster,header_for_burn_data);
+
+      string full_burned_csv_name = OUT_DIR+OUT_ID+"_burned.csv";
+      cout << "Now I'll print the data to a new file, the file is: " << full_burned_csv_name << endl;
+      CSVFile.print_data_to_csv(full_burned_csv_name);
+
+      if ( this_bool_map["convert_csv_to_geojson"])
+      {
+        string gjson_name = OUT_DIR+OUT_ID+"_csv_burned.geojson";
+        LSDSpatialCSVReader thiscsv(full_burned_csv_name);
+        thiscsv.print_data_to_geojson(gjson_name);
+      }
+    }
+    else
+    {
+      cout << "Burn raster doesn't exist so I didn't do anything." << endl;
+    }
+  }
+  //============================================================================
+
+
+
+
+
+
+  //============================================================================
   // Compute hillshade and print
   //============================================================================
   if (this_bool_map["write_hillshade"])
@@ -252,41 +332,61 @@ int main (int nNumberofArgs,char *argv[])
   //============================================================================
   // The surface fitting metrics
   //============================================================================
-  vector<int> raster_selection(8, 0);  // This controls which usrface fitting metrics to compute
+  vector<int> raster_selection(9, 0);  // This controls which surface fitting metrics to compute
+  bool doing_polyfit = false;
   if(this_bool_map["print_smoothed_elevation"])
   {
     raster_selection[0] = 1;
+    doing_polyfit = true;
   }
   if(this_bool_map["print_slope"])
   {
     raster_selection[1] = 1;
+    doing_polyfit = true;
   }
   if(this_bool_map["print_aspect"])
   {
     raster_selection[2] = 1;
+    doing_polyfit = true;
   }
   if(this_bool_map["print_curvature"])
   {
     raster_selection[3] = 1;
+    doing_polyfit = true;
   }
   if(this_bool_map["print_planform_curvature"])
   {
     raster_selection[4] = 1;
+    doing_polyfit = true;
   }
   if(this_bool_map["print_profile_curvature"])
   {
     raster_selection[5] = 1;
+    doing_polyfit = true;
   }
   if(this_bool_map["print_tangential_curvature"])
   {
     raster_selection[6] = 1;
+    doing_polyfit = true;
   }
   if(this_bool_map["print_point_classification"])
   {
     raster_selection[7] = 1;
+    doing_polyfit = true;
+  }
+  if(this_bool_map["print_directional_gradients"])
+  {
+    raster_selection[8] = 1;
+    doing_polyfit = true;
   }
   vector<LSDRaster> surface_fitting;
-  surface_fitting = topography_raster.calculate_polyfit_surface_metrics(this_float_map["surface_fitting_radius"], raster_selection);
+  
+  if (doing_polyfit)
+  {
+    cout << "I am running the polyfit function. This could take some time." << endl;
+  }
+  
+  surface_fitting = topography_raster.calculate_polyfit_surface_metrics_directional_gradients(this_float_map["surface_fitting_radius"], raster_selection);
   if(this_bool_map["print_smoothed_elevation"])
   {
     cout << "Let me print the smoothed elevation raster for you."  << endl;
@@ -335,7 +435,39 @@ int main (int nNumberofArgs,char *argv[])
     string this_raster_name = OUT_DIR+OUT_ID+"_CLASS";
     surface_fitting[7].write_raster(this_raster_name,raster_ext);
   }
+  if(this_bool_map["print_directional_gradients"])
+  {
+    cout << "Let me print the directional gradient rasters for you."  << endl;
+    string this_raster_name1 = OUT_DIR+OUT_ID+"_DDX";
+    string this_raster_name2 = OUT_DIR+OUT_ID+"_DDY";
+    surface_fitting[8].write_raster(this_raster_name1,raster_ext);
+    surface_fitting[9].write_raster(this_raster_name2,raster_ext);
+  }
+
   
+  //============================================================================
+  // Print the roughness rasters
+  //============================================================================
+  if(this_bool_map["print_REI_raster"])
+  {
+    LSDRaster REI_raster = topography_raster.calculate_REI(this_float_map["REI_window_radius"], this_float_map["REI_critical_slope"]);
+    string this_raster_name = OUT_DIR+OUT_ID+"_REI";
+    REI_raster.write_raster(this_raster_name,raster_ext);
+  }
+  
+  if(this_bool_map["print_roughness_rasters"])
+  {
+    // This just ensures all three roughness rasters are printed
+    vector<int> file_code;
+    file_code.push_back(1);  file_code.push_back(1); file_code.push_back(1);
+    string file_prefix = OUT_DIR+OUT_ID;
+    
+    // THe roughness radius should be around 3m for a 1m DEM: you get more diffuse "rocks with wider radii"
+    topography_raster.calculate_roughness_rasters(this_float_map["surface_fitting_radius"], this_float_map["roughness_radius"],
+                    file_prefix, file_code);
+  }
+
+
 
   //============================================================================
   // Print the wiener filtered raster if that is what you want
@@ -376,7 +508,8 @@ int main (int nNumberofArgs,char *argv[])
         || this_bool_map["print_junction_index_raster"]
         || this_bool_map["print_junctions_to_csv"]
         || this_bool_map["find_basins"]
-        || this_bool_map["print_chi_data_map"])
+        || this_bool_map["print_chi_data_map"]
+        || this_bool_map["print_junction_angles_to_csv"])
   {
     cout << "I will need to compute flow information, because you are getting drainage area or channel networks." << endl;
     //==========================================================================
@@ -477,7 +610,8 @@ int main (int nNumberofArgs,char *argv[])
         || this_bool_map["print_junctions_to_csv"]
         || this_bool_map["print_sources_to_csv"]
         || this_bool_map["find_basins"] 
-        || this_bool_map["print_chi_data_maps"])
+        || this_bool_map["print_chi_data_maps"]
+        || this_bool_map["print_junction_angles_to_csv"])
     {
       // calculate the flow accumulation
       cout << "\t Calculating flow accumulation (in pixels)..." << endl;
@@ -539,6 +673,23 @@ int main (int nNumberofArgs,char *argv[])
           thiscsv.print_data_to_geojson(gjson_name);
         }
       }
+      
+      // print the junction angles
+      if( this_bool_map["print_junction_angles_to_csv"])
+      {
+        cout << "I am testing the junction angle code." << endl;
+        string JAngles_csv_name = OUT_DIR+OUT_ID+"_JAngles.csv";
+        vector<int> JunctionList;
+        JunctionNetwork.print_junction_angles_to_csv(JunctionList, FlowInfo, JAngles_csv_name);
+
+        if ( this_bool_map["convert_csv_to_geojson"])
+        {
+          string gjson_name = OUT_DIR+OUT_ID+"_JAngles.geojson";
+          LSDSpatialCSVReader thiscsv(JAngles_csv_name);
+          thiscsv.print_data_to_geojson(gjson_name);
+        }
+      }
+      
     
       // Print sources
       if( this_bool_map["print_sources_to_csv"])
